@@ -1,31 +1,31 @@
 # Changelog
 
-## 0.1.0 — 31 July 2026
+## 0.1.0 - 31 July 2026
 
 First build shared for testing.
 
 ### New
 
-- **Five new effects** — Cyanotype, Electron scan, Risograph, Thermal camera,
+- **Five new effects** - Cyanotype, Electron scan, Risograph, Thermal camera,
   Terminal. Fifteen in total.
 - **Oscilloscope rebuilt** as five instruments in one: waveform, spectrum,
   spectrogram, stereometer, bands. Flat instrument styling rather than a CRT,
   with five colour palettes.
-- **New project dialog** on launch — name it, point it at audio and footage.
-- **Fonts** — the interface font is now yours to choose from anything installed
+- **New project dialog** on launch - name it, point it at audio and footage.
+- **Fonts** - the interface font is now yours to choose from anything installed
   on the machine, and text layers get their own font picker with each family
   previewed in its own face.
-- **Preferences** — theme, accent colour, text size, per-region colours.
-- **Export** — 1080p / 2K / 4K, several aspect ratios, and a progress dialog you
+- **Preferences** - theme, accent colour, text size, per-region colours.
+- **Export** - 1080p / 2K / 4K, several aspect ratios, and a progress dialog you
   can keep working behind.
 - **Keyboard shortcuts** drawn on a keyboard instead of listed as text.
-- **Frame-time readout** — shows the *worst* frame over a rolling window, not
+- **Frame-time readout** - shows the *worst* frame over a rolling window, not
   just an average, because an average hides exactly the stutter people notice.
 
 ### Fixed
 
 - **Audio reactivity did not work without a pre-analysis step.** Loading an
-  ordinary audio file left all ten channels reading zero — every meter flat and
+  ordinary audio file left all ten channels reading zero - every meter flat and
   every audio-driven control dead. Channels are now derived from the live signal
   when no analysis file is present. *This was the largest problem in the app.*
 - **The viewport looked soft and blocky.** It rendered at logical pixel size and
@@ -52,7 +52,7 @@ First build shared for testing.
 
 ### Known limitations
 
-- Not code-signed — Windows SmartScreen warns on first run.
+- Not code-signed - Windows SmartScreen warns on first run.
 - Windows only; the renderer is Direct3D 11 with no software fallback.
 - The Oscilloscope is the most expensive effect, Stereometer especially.
 - Datamosh approximates the look; it cannot smear one shot into the next.

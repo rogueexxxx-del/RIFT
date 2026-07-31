@@ -6,7 +6,7 @@
 
 **Sound into picture.**
 
-Audio-reactive visuals for Windows — load a track, stack footage, drive any
+Audio-reactive visuals for Windows - load a track, stack footage, drive any
 setting from the music, export up to 4K. Or plug in a controller and perform it.
 
 [Download](#download) · [Guide](GUIDE.md) · [What's new](CHANGELOG.md)
@@ -22,7 +22,7 @@ look and stop. The serious ones expect you to already know what a feedback
 buffer is.
 
 RIFT is the middle. Nothing hidden behind jargon, nothing dumbed down, and you
-should get somewhere good on the first evening — without giving up the ceiling
+should get somewhere good on the first evening - without giving up the ceiling
 later.
 
 ---
@@ -31,7 +31,7 @@ later.
 
 <div align="center">
 
-*The app — effect chain on the left, settings on the right, timeline below.*
+*The app - effect chain on the left, settings on the right, timeline below.*
 
 <img src="screenshots/app.png" width="900" alt="RIFT main window">
 
@@ -56,7 +56,7 @@ stereometer, bands.*
 
 Grab the latest **`RIFT-0.1.0-setup.exe`** from
 [**Releases**](../../releases/latest), run it, and you're done. Everything the
-app needs is inside — no Qt, no FFmpeg, no runtime to install separately.
+app needs is inside - no Qt, no FFmpeg, no runtime to install separately.
 
 **Requirements**
 
@@ -65,13 +65,13 @@ app needs is inside — no Qt, no FFmpeg, no runtime to install separately.
 
 **Windows will warn you.** The app isn't code-signed yet, so you'll see
 *"Windows protected your PC"*. Click **More info → Run anyway**. Some antivirus
-may also flag a new unsigned program — that's reputation, not detection.
+may also flag a new unsigned program - that's reputation, not detection.
 
 ---
 
 ## What it does
 
-**Bring in anything** — video, images, vectors, text. Multiple clips on stacked
+**Bring in anything** - video, images, vectors, text. Multiple clips on stacked
 lanes with blend modes, opacity and transform.
 
 **Fifteen effects**, chained in any order, each with a blend mode and mix amount:
@@ -81,20 +81,20 @@ lanes with blend modes, opacity and transform.
 | **Pattern** | Ascii · Halftone · Dither · Risograph · Terminal |
 | **Damage** | Glitch · Pixel sort · Datamosh · Fracture |
 | **Photographic** | Cyanotype · Thermal cam · Electron scan · Noise field · Blur |
-| **Audio** | Oscilloscope — waveform, spectrum, spectrogram, stereometer, bands |
+| **Audio** | Oscilloscope - waveform, spectrum, spectrogram, stereometer, bands |
 
-**Drive any setting from the music.** Ten channels — bass, mids, highs, drums,
-transients, kick, snare, tempo, brightness, time — patched to any slider with an
+**Drive any setting from the music.** Ten channels - bass, mids, highs, drums,
+transients, kick, snare, tempo, brightness, time - patched to any slider with an
 adjustable depth. **No pre-analysis step:** load a `.wav` or `.mp3` and it works.
 
-**Keyframe anything**, with linear, ease or step interpolation — and keyframes
+**Keyframe anything**, with linear, ease or step interpolation - and keyframes
 stack *on top of* audio reactivity, so a parameter can be both automated and
 reactive.
 
 **Beat detection** with snap-to-beat clip dragging, so cuts land on the music.
 
 **Two modes.** *React* builds a piece and exports it. *Live* performs it, mapped
-to a MIDI controller — with a drawn layout for the Arturia MiniLab mk II, plus
+to a MIDI controller - with a drawn layout for the Arturia MiniLab mk II, plus
 OSC.
 
 **Export** to 1080p, 2K or 4K, several aspect ratios, four quality levels
@@ -109,11 +109,11 @@ Full walkthrough in the [**guide**](GUIDE.md).
 
 Honest list, so testers aren't surprised:
 
-- **Not code-signed** — SmartScreen will warn on first run.
+- **Not code-signed** - SmartScreen will warn on first run.
 - **Windows only.** The renderer is Direct3D 11; there's no software fallback.
 - **The Oscilloscope is the most expensive effect**, especially Stereometer.
   On a heavy chain it can drop the frame rate. The readout at the top right
-  shows the worst recent frame time — amber means it's missing 60 fps.
+  shows the worst recent frame time - amber means it's missing 60 fps.
 - **Datamosh is an approximation.** True datamosh needs the previously decoded
   frame; this reproduces the macroblock grid, drift and bloom, but a still image
   won't smear into the next shot.
