@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.1.1 - 31 July 2026
+
+Fixes from the first round of testing.
+
+### Fixed
+
+- **Exports stopped when the footage ran out.** A 4 second clip under a 2 minute
+  track rendered a few seconds of picture and then two minutes of black. Footage
+  shorter than the piece now loops. Keyframes and audio reactivity keep running
+  forward on real time, so only the picture repeats.
+- **Export length ignored the audio** unless a pre-analysis file was present, so
+  a render could come out as long as the clip instead of as long as the track.
+  It now uses the decoded length, and runs to whichever of audio or footage is
+  longer.
+- **An effect could not be changed.** The only way to swap one was to add a
+  second effect and delete the first. Selected effects now carry a button that
+  reopens the picker and replaces them.
+- **Right-clicking a clip deleted it instantly.** It asks first.
+- A clip could be dragged to a negative start time, where it stopped following
+  the mouse with no explanation.
+
+### Changed
+
+- **Mark in / mark out.** Set a range on the timeline and the export renders
+  only that. Everything outside the marks is dimmed so the range is visible
+  without opening a dialog.
+- **Effect settings are no longer a wall of controls.** Every parameter used to
+  draw four rows; now it draws one, and the keyframe, audio and MIDI controls
+  open for the parameter you are working on.
+- **The timeline reads like a timeline** - filled lane beds so an empty lane is
+  a visible target, a time grid aligned to the ruler, taller lanes, a usable
+  keyframe lane, and a playhead with a head you can see. Clips are tinted with
+  an accent edge instead of a solid block that drowned their name.
+- **MIDI controls light up when they send**, so a controller confirms itself
+  where you are looking instead of on the far side of the window.
+- **The frame-rate readout** is a chip that matches the rest of the interface
+  rather than loose red text.
+- Plain hyphens instead of em dashes throughout.
+
 ## 0.1.0 - 31 July 2026
 
 First build shared for testing.
