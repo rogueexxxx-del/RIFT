@@ -1,0 +1,6 @@
+# This repo carries the RELEASE and its documentation, not the source.
+# Builds are attached to GitHub Releases, never committed: GitHub rejects any
+# file over 100 MB, and a binary that large would sit in git history forever.
+*.zip
+*.exe
+dist/
