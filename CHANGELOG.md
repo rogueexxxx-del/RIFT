@@ -1,5 +1,115 @@
 # Changelog
 
+## 0.1.2 - 1 August 2026
+
+Second and third rounds of testing fixes. Everything on the list from the last
+round is in, and the timeline was largely rebuilt.
+
+### Fixed
+
+- **A terminal window opened alongside the app.** The executable was being
+  linked as a console program, so Windows gave it a console every launch.
+- **The timeline stuttered.** With it on screen the worst frame was 251 ms;
+  hidden, 33 ms. A per-frame check compared the track length with a tolerance
+  of about a picosecond, so a duration wobbling in its last bits rebuilt the
+  entire clip model on every single frame. Worst frame is now around 30 ms and
+  React sits within a couple of frames per second of Live.
+- **The three dots beside a parameter did nothing.** They drew, but their
+  container had no height, and a zero-height item receives no clicks.
+- **Exporting was far slower than it needed to be.** Every render pass opened
+  its own GPU frame, and each one is a submit followed by a wait for the card to
+  drain - so a chain of three effects paid three full stalls per frame on top of
+  the audio uploads and the readback. The whole frame is now one submit, and a
+  three-effect chain costs the same as one.
+- Audio textures were uploaded in two separate GPU submissions per frame instead
+  of one.
+
+### New
+
+- **Preset library.** Save the current look and pick it back out of a list.
+  Presets live in your app data, so they are there in every project.
+- **Duplicate clip**, effects and all.
+- **Seek buttons** either side of play, five seconds at a time.
+- **Mark in / mark out** for exporting a range.
+
+### Changed
+
+- **Sliders** have a real handle instead of a filled box, so the value is
+  visible and the control looks draggable.
+- **One transport, not two.** Live mode had its own play/pause under the
+  controller as well as the one under the viewport.
+- **Panels are ordered per mode** - Live puts the controller first, React puts
+  colour and parameters first with the render queue last.
+- **Export defaults to 30 fps**, which halves both render time and file size
+  against 60.
+
+### The timeline
+
+- **Trimming did nothing until you let go of the mouse.** The edge handle only
+  reported its drag on release, so pulling a clip edge felt like the grab had
+  never registered. Both edges now follow the pointer live.
+- **Clips lagged behind the cursor while dragging.** The drag distance was
+  measured in the coordinate system of the item being dragged - which moves as
+  it is dragged, so each measurement cancelled part of its own effect. Clips,
+  clip edges and keyframes all sit under the pointer now.
+- **Dropping onto a lane was guesswork.** A dragged clip floated between rows.
+  It snaps to whole lanes, and the lane it will land on lights up.
+- **Snapping.** Clips pull to the start of the piece, the playhead, and the
+  head or tail of any other clip - ten pixels of pull, so it feels the same at
+  every zoom.
+- **Edge handles are wider** (7px was narrower than a cursor's hot zone) and
+  show grip marks and a resize cursor.
+- **A new clip lands on the first empty lane** instead of being appended after
+  whatever is already on V1.
+- **Razor, copy, paste, fill and remove** as icon buttons on the toolbar.
+
+### Live
+
+- **Audio from any application.** Pick an output device and RIFT reacts to
+  whatever it is playing - a DAW, a browser, a player. No virtual cable, no
+  plugin. The device list refreshes when you open it, so a DAW started after
+  RIFT still appears.
+- **Two sound sources could play at once.** Live listens to the machine's
+  output while React plays the project track, so you heard both - and RIFT
+  could react to its own output. Switching modes now stops the other one.
+- **Footage can be imported with the timeline hidden**, which was previously
+  impossible in Live.
+- **One source picker**, not two disagreeing ones.
+- **A mapping list that works with any controller**, beside the drawn one.
+
+### Composition
+
+- **Split screen and picture in picture.** A clip carries a crop rectangle as
+  well as a transform, and the clip inspector has one-click layouts: full,
+  left, right, top, bottom, corner.
+- **Aspect ratio is chosen when the project starts**, not at export - composing
+  against the wrong frame and finding out at the end means redoing the work.
+- **Preset library**, saved to your app data and available in every project.
+- **Stills can be stretched.** A PNG reports one frame of duration, so it
+  landed on the timeline a few pixels wide with an edge too small to grab.
+
+### Interface
+
+- **Every dock panel is a collapsible section** with the same header: click
+  anywhere on the row, and a closed section still reports what it is doing.
+- **Effect chain drawn as nodes** with ports and a signal path, rather than a
+  list of boxes.
+- **Consistent spacing.** Twenty-seven hand-picked gap values across thirteen
+  files meant no two rows in the app lined up; they now share one token.
+- Smaller slider handles, a larger and easier-to-hit disclosure control, and
+  compact buttons in the keyframe and patch strips.
+
+### Also fixed
+
+- **Effects silently did nothing when a blend mode was set.** The compositor
+  gained crop parameters and two callers were still passing the old count, so
+  the crop arrived as zero and the shader discarded every pixel.
+- **The three dots beside a parameter did nothing.** The property they wrote to
+  was declared on the wrong object, so every click was a no-op.
+- **SVG files loaded and rendered as a placeholder checkerboard.** Decoding is
+  FFmpeg, which has no SVG decoder in an LGPL build. They are no longer offered,
+  and loading one says why.
+
 ## 0.1.1 - 31 July 2026
 
 Fixes from the first round of testing.
