@@ -259,11 +259,20 @@ Projects save as **`.rt`**.
 
 - **File ▸ Save / Save as…** - everything: clips, chains, keyframes, grade,
   mappings, mode
-- **File ▸ Save preset…** - the *look* only, no clips
+- **File ▸ Save preset…** - the *look* only
 
-A preset is just a project without clips, so opening one drops your look onto
-whatever footage is already loaded. That's the whole mechanism - no separate
-preset format to learn.
+A preset carries the effect chain, its parameters, the colour grade and your
+controller mappings. It deliberately does **not** carry clips, the audio track,
+markers or which mode you were in - those belong to the piece, not to the look.
+Applying one drops your look onto whatever is already loaded and changes nothing
+else.
+
+**Editing a preset does not change the preset.** Applying one is a starting
+point: tweak whatever you like afterwards and Save still writes to your project.
+The saved preset only changes when you explicitly save over it by name.
+
+Both use the same `.rt` file format, so there is no second format to learn -
+they differ in what is written into them.
 
 **Undo/redo** covers timeline and parameter edits. The Edit menu names what it
 will undo.
@@ -326,7 +335,7 @@ keyframed and audio-patched.
 |---|---|
 | **Glitch** | Block displacement and colour bleed, triggered by transients. |
 | **Pixel sort** | Sorts pixels along a direction by brightness. Slower than most; expect it. |
-| **Datamosh** | What a codec does with its keyframes deleted - macroblocks smearing, colour tearing, I-frame snaps. Patch **I-frame** to Kick. |
+| **Datamosh** | What a codec does with its keyframes deleted - macroblocks smearing, colour tearing, I-frame snaps. **Persist** is the one that matters: above zero, blocks are dragged from the previous frame, so one shot bleeds into the next. **I-frame** lets the real picture back in - patch it to Kick. |
 
 ### Photographic and scientific
 

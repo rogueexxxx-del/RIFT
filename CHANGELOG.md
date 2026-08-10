@@ -28,9 +28,30 @@ Oscilloscope disappearing at high output resolutions.
 - **Slit scan** - time displacement, each column from a different moment.
 - **Post FX** is now in the effect picker. It was in the app all along and
   unreachable from the interface.
+- **Datamosh does the real thing now.** A new **Persist** control pulls each
+  block from the previous output instead of the current frame, so old pixels
+  get dragged around by new motion and one shot bleeds through into the next -
+  the artefact it was only imitating before. **I-frame** is what lets the true
+  picture back in. Its motion vectors now follow what actually changed between
+  frames rather than which parts of the picture were brightest. Projects saved
+  before this load with Persist at 0 and look exactly as they did.
 
 ### Fixed
 
+- **Presets and projects were the same thing wearing different names.** Saving a
+  preset pointed the session at the preset file, so the next Save wrote to the
+  preset library instead of the project - edit anything after applying a preset
+  and you silently rewrote the preset. Applying one also loaded whatever audio
+  the preset happened to be saved with and could flip you between React and
+  Live. A preset is now the look only: chain, parameters, grade, controller
+  bindings. No clips, no audio, no markers, no mode, and it never becomes the
+  file you are working on. Presets saved by older builds are read the same way,
+  so the ones already in your library stop moving your audio around.
+- **A dock would not stay on the side you moved it to.** The swap set one dock's
+  side and then the other's, and because bindings re-evaluate immediately, both
+  docks claimed the same layout column in between - two items in one cell, and
+  the layout never recovered. Both sides now come from a single value, so they
+  cannot disagree even for an instant. The arrangement persists across restarts.
 - **The Oscilloscope faded out at 4K and changed weight with the aspect ratio.**
   Line and grid widths were held at a fixed number of *device pixels*, which is
   right for something drawn on screen and wrong for a rendered frame: the same
