@@ -327,7 +327,6 @@ keyframed and audio-patched.
 | **Glitch** | Block displacement and colour bleed, triggered by transients. |
 | **Pixel sort** | Sorts pixels along a direction by brightness. Slower than most; expect it. |
 | **Datamosh** | What a codec does with its keyframes deleted - macroblocks smearing, colour tearing, I-frame snaps. Patch **I-frame** to Kick. |
-| **Fracture** | Splits and offsets the image geometrically. |
 
 ### Photographic and scientific
 
@@ -336,8 +335,38 @@ keyframed and audio-patched.
 | **Cyanotype** | Sun-print process. A blue negative on rag paper, with wash blotches and edge burn. |
 | **Thermal cam** | False-colour infrared. Four palettes; **Cold** and **Hot** set the range and matter more than the palette. |
 | **Electron scan** | Scanning electron microscope - greyscale, glowing edges, beam drift, charge bloom. |
-| **Noise field** | Flowing noise displacement. One of the heavier effects. |
 | **Blur** | Gaussian blur with several modes. |
+| **Lens** | The camera itself - barrel distortion, radial colour fringing, an anamorphic streak off the highlights, vignette. **Fringe** grows with distance from centre, so the middle stays clean. |
+| **Bloom** | Threshold, spread, add back. Unlike Blur it keeps the picture and lays light over it. **Tint** colours only the glow. |
+
+### Symmetry
+
+| Effect | What it does |
+|---|---|
+| **Kaleido** | Folds the frame into wedges around a movable centre, mirroring alternate ones so the seams meet. **Segments** is patched to Snare by default, so the count snaps on a hit. |
+| **Mirror tile** | The same idea on a rectangular grid. **Mode** picks plain repeat, mirror X, mirror Y or the four-way quad. |
+
+### Motion and time
+
+| Effect | What it does |
+|---|---|
+| **Flow warp** | Domain-warped noise - the molten, liquid look. The field is fed through itself twice, which makes currents that fold rather than one sheet sliding. Warp/Speed/Chroma are patched to Bass/Mids/Highs. |
+| **Feedback** | Last frame, transformed slightly, laid under this one. Trails, echo tunnels, dye smear. Keep **Decay** below 1.0 - at 1.0 nothing is ever lost and the frame saturates to white. |
+| **Slit scan** | Time displacement: each column shows a different moment. Builds its history as it plays, so give it a couple of seconds of run-up. |
+
+### Geometry
+
+| Effect | What it does |
+|---|---|
+| **Voronoi shatter** | Breaks the frame into cells that slide apart and snap back. **Split** is patched to Transient, which is what makes it read as an impact. |
+| **Dot field** | A grid of shaded dots lifted out of the picture by brightness. Not Halftone - these have depth and shading rather than varying size on a flat plane. |
+| **Tunnel** | A raymarched corridor with the footage projected onto the wall. The second most expensive effect after the Oscilloscope. |
+
+### Finishing
+
+| Effect | What it does |
+|---|---|
+| **Post FX** | The catch-all output pass - vignette, grain, scanlines, dither, halftone dot, glass refraction, and a feedback tracker. Twenty parameters; most projects use three of them. |
 
 ### Audio visualisation
 

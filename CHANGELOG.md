@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.1.3 - 10 August 2026
+
+Nine new effects, the feedback loop that three of them needed, and a fix for the
+Oscilloscope disappearing at high output resolutions.
+
+### New
+
+- **Feedback texture.** Shaders can now read the previous finished frame. This
+  was declared in the code and never wired up - a shader asking for it was
+  silently handed a 1x1 black pixel. Three of the new effects need it, and
+  Datamosh is the next in line to use it.
+- **Kaleido** - polar mirror, wedges folded around a movable centre. Segment
+  count is patched to Snare, so it snaps on a hit.
+- **Mirror tile** - the same on a rectangular grid, with four mirroring modes.
+- **Flow warp** - domain-warped noise. The molten, liquid look; the field runs
+  through itself twice so the currents fold instead of sliding as one sheet.
+- **Voronoi shatter** - the frame breaks into cells that slide apart on a
+  transient and snap back.
+- **Dot field** - a grid of shaded dots lifted out of the picture by brightness.
+- **Tunnel** - a raymarched corridor with the footage projected onto the wall.
+- **Lens** - barrel distortion, radial colour fringing, anamorphic streak,
+  vignette.
+- **Bloom** - threshold, spread, add back, with a tint that colours only the
+  glow.
+- **Feedback** - last frame laid under this one. Trails and echo tunnels.
+- **Slit scan** - time displacement, each column from a different moment.
+- **Post FX** is now in the effect picker. It was in the app all along and
+  unreachable from the interface.
+
+### Fixed
+
+- **The Oscilloscope faded out at 4K and changed weight with the aspect ratio.**
+  Line and grid widths were held at a fixed number of *device pixels*, which is
+  right for something drawn on screen and wrong for a rendered frame: the same
+  trace that is bold in the viewport is a third as thick, proportionally, in a
+  2160-tall export, and the hairline grid vanished entirely. Widths are now a
+  fraction of the frame height, floored at one real pixel. Separately, distances
+  were measured in raw uv and converted using the height alone, so a steep part
+  of the trace thinned on a wide frame and thickened on a tall one.
+
+### Removed
+
+- **Noise field** and **Fracture** are no longer offered in the effect picker.
+  Existing projects that use them still load and render.
+
 ## 0.1.2 - 1 August 2026
 
 Second and third rounds of testing fixes. Everything on the list from the last

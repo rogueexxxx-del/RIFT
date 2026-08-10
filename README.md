@@ -37,7 +37,7 @@ later.
 
 <br>
 
-*Fifteen effects, from print processes to codec damage.*
+*Twenty-four effects, from print processes to codec damage.*
 
 <img src="screenshots/effects.png" width="900" alt="Effect gallery">
 
@@ -74,14 +74,19 @@ may also flag a new unsigned program - that's reputation, not detection.
 **Bring in anything** - video, images, vectors, text. Multiple clips on stacked
 lanes with blend modes, opacity and transform.
 
-**Fifteen effects**, chained in any order, each with a blend mode and mix amount:
+**Twenty-four effects**, chained in any order, each with a blend mode and mix
+amount:
 
 | | |
 |---|---|
 | **Pattern** | Ascii · Halftone · Dither · Risograph · Terminal |
-| **Damage** | Glitch · Pixel sort · Datamosh · Fracture |
-| **Photographic** | Cyanotype · Thermal cam · Electron scan · Noise field · Blur |
+| **Damage** | Glitch · Pixel sort · Datamosh |
+| **Photographic** | Cyanotype · Thermal cam · Electron scan · Blur · Lens · Bloom |
+| **Symmetry** | Kaleido · Mirror tile |
+| **Motion** | Flow warp · Feedback · Slit scan |
+| **Geometry** | Voronoi shatter · Dot field · Tunnel |
 | **Audio** | Oscilloscope - waveform, spectrum, spectrogram, stereometer, bands |
+| **Finishing** | Post FX - vignette, grain, scanlines, dither, glass · Colour grade |
 
 **Drive any setting from the music.** Ten channels - bass, mids, highs, drums,
 transients, kick, snare, tempo, brightness, time - patched to any slider with an
@@ -116,7 +121,14 @@ Honest list, so testers aren't surprised:
   shows the worst recent frame time - amber means it's missing 60 fps.
 - **Datamosh is an approximation.** True datamosh needs the previously decoded
   frame; this reproduces the macroblock grid, drift and bloom, but a still image
-  won't smear into the next shot.
+  won't smear into the next shot. Feedback and Slit scan now do have access to
+  the previous frame, so this one is next in line to use it.
+- **Slit scan builds its history as it plays.** It accumulates from the
+  previous frame rather than holding a buffer of past frames, so it needs about
+  two seconds of run-up and cannot be scrubbed. Give it a lead-in rather than
+  cutting on the first frame.
+- **Tunnel is a raymarcher.** Around 48 steps per pixel. It holds 60 fps here,
+  but it is the second most expensive effect after the Oscilloscope.
 - **Docks swap sides rather than float freely.** Free-floating panels aren't in
   yet.
 
