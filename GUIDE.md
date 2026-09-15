@@ -204,12 +204,15 @@ type - put `glitch` or `datamosh` on a text layer and patch the amount to Snare.
 **View ▸ Colour grade** opens a master grade applied after everything else:
 exposure, lift, gamma, gain, contrast, saturation, temperature, tint.
 
-The header turns accent-coloured and reads *graded* whenever anything is off its
-default, so you always know it's active. **Reset** returns to neutral. A neutral
-grade costs nothing - the pass is skipped entirely.
+The header turns accent-coloured and reads *graded* whenever the grade is doing
+anything - a control off its default, patched to audio, or carrying keyframes -
+so you always know it's active. **Reset** returns to neutral and clears patches
+and keys too. A neutral grade costs nothing - the pass is skipped entirely.
 
 Grade controls are real parameters, so they take keyframes and audio patching
-like everything else.
+like everything else. Click the **dots** beside a slider to open the same Key and
+Patch rows an effect parameter has: key the grade at the playhead, key it on
+every beat, or patch Exposure to the kick so the whole frame flashes on a hit.
 
 ---
 

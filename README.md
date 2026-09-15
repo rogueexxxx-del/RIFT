@@ -54,7 +54,7 @@ stereometer, bands.*
 
 ## Download
 
-Grab the latest **`RIFT-0.1.2-setup.exe`** from
+Grab the latest **`RIFT-0.1.4-setup.exe`** from
 [**Releases**](../../releases/latest), run it, and you're done. Everything the
 app needs is inside - no Qt, no FFmpeg, no runtime to install separately.
 

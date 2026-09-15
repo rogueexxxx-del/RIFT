@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.1.4 - 15 September 2026
+
+A full audit of every effect, parameter and editing tool. The headline: effects
+that exported black now export what the viewport shows, and footage shorter
+than the music loops instead of freezing.
+
+### New
+
+- **The colour grade can be animated and driven by audio.** Every grade control
+  now has the same keyframe and patch controls as an effect parameter - open the
+  dots beside a slider. The engine always supported this; nothing in the
+  interface could reach it. Reset now clears patches and keys as well as values,
+  and the panel reads "graded" whenever anything is moving it.
+
+### Fixed
+
+- **Tunnel, Lens, Kaleido and every other effect that reads the footage exported
+  black when no footage was loaded.** The viewport ran the chain over its
+  placeholder picture; the export ran it over nothing at all, which a shader sees
+  as a single black pixel. Both now use the same source. (The Oscilloscope draws
+  from the audio file, so it needs one loaded - that part was never broken.)
+- **Footage shorter than the music froze on its last frame.** The first pass
+  played, then the picture held still for the rest of the track. It now repeats.
+- **Effects looked different in a 4K export than in the viewport.** Blur
+  (Gaussian), Dither, Halftone, the halftone and dither in Post FX, Terminal
+  scanlines, Cyanotype paper grain, the Risograph screen and Electron scan rows
+  all measured their size in screen pixels, so a 4K export drew them at a third
+  of the size you set them to. They are now fractions of the frame, and look
+  exactly as before at 1080p.
+- **Glitch did nothing without audio.** Every control was multiplied by the
+  audio level, so with no track loaded the sliders appeared broken.
+- **Fracture had no Amount control, so it did nothing.** Only older projects
+  use it; they now render it properly.
+- **Halftone Soft did nothing for the bottom half of its range.**
+- **Selecting a clip wiped the shared effect chain.** Going back to the shared
+  chain showed the clip's effects in its place, and saving while a clip was
+  selected left the shared chain out of the file.
+- **Deleting or reordering effects sent MIDI and OSC controls to the wrong
+  effect.**
+- **Deleting or splitting a clip could overwrite a different clip's effects.**
+- **Changing the effect on a selected clip did nothing** until some other edit
+  happened to push it through.
+- **Dragging a clip's left edge moved its right edge.** Trimming the start now
+  moves the start.
+- **A key added on a beat could not be deleted**, and the keyed indicator could
+  disagree with the Set and Delete buttons.
+- **Key on every beat stopped at the end of the footage** instead of running to
+  the end of the music.
+- **Loading a second audio file kept the first one's waveform and beat
+  markers.**
+- **After swapping dock sides, a dock could land in the wrong layout cell** and
+  block clicks to its own controls.
+- **Text layers:** the Size and position sliders undid each other, the colour
+  buttons threw the text off the frame at maximum size, and a second text layer
+  landed exactly on top of the first.
+- **Deleting a preset also applied it.**
+- **Moving the mark in or out changed renders that were already queued.**
+- **Knobs and pads in the controller view never lit up when moved.**
+
 ## 0.1.3 - 10 August 2026
 
 Nine new effects, the feedback loop that three of them needed, and a fix for the
