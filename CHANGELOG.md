@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.5 - 05 October 2026
+
+Deterministic export render fixes, shader uniform ring-buffering, and brutalist UI redesign.
+
+### New & Changed (UI)
+
+- **Brutalist Technical Interface**: Full redesign enforcing 0px corner radius everywhere, 1px hairlines, 2px slider tracks with 8px square thumbs, and 28px uppercase micro-label headers.
+- **Fixed Audio Channel Colors**: Standardized audio channel color tokens across meters, mapping chips, and parameter sliders (BAS/KIK #FF5A36, MID/SNR #FFB020, HIG/CEN #3CC8FF, DRM/TRN #5BE08A, BPM/TIM #FF6FB5).
+- **Tabular Numeric Readouts**: High-precision 18px monospace timecodes and frame metrics.
+
+### Fixed (Engine & Export)
+
+- **Dynamic UBO overwrites in multi-pass export chains**: Implemented a 32-slot per-pass ring buffer in `RhiContext` to ensure multi-pass effects (e.g. Tunnel, Oscilloscope, Bloom) receive isolated dynamic uniform buffers during single-command-buffer submissions.
+- **Uninitialized Visualizer Color LUTs**: Default 8-row visualizer color LUT baked into `RhiContext` on startup and mirrored to offline export instances, preventing missing or blank visualizer renders.
+- **Export Queue Pipeline Initialization**: Queued clips, audio streams, and effect chains now apply immediately at the start of export before calculating bounds.
+- **Silent Shader Pipeline Failures**: Removed silent checkerboard pass-through on shader failures; `RenderGraph` now emits loud error diagnostics specifying the failed stage and pipeline.
+
 ## 0.1.4 - 15 September 2026
 
 A full audit of every effect, parameter and editing tool. The headline: effects

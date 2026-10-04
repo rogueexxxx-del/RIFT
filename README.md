@@ -1,153 +1,92 @@
-<div align="center">
-
-<img src="screenshots/icon.png" width="96" alt="RIFT">
-
 # RIFT
 
-**Sound into picture.**
+> **Real-time audio-reactive visual engine and GPU effect processor.**
 
-Audio-reactive visuals for Windows - load a track, stack footage, drive any
-setting from the music, export up to 4K. Or plug in a controller and perform it.
-
-[Download](#download) · [Guide](GUIDE.md) · [What's new](CHANGELOG.md)
-
-</div>
+RIFT turns music into picture. It runs video footage, images, text, and procedural generators through an audio-driven GPU effect chain, rendering in real time for live performance or exporting frame-accurate videos up to 4K.
 
 ---
 
-## What it is
+## Features
 
-Every tool for this is either a toy or a second job. The simple ones make one
-look and stop. The serious ones expect you to already know what a feedback
-buffer is.
-
-RIFT is the middle. Nothing hidden behind jargon, nothing dumbed down, and you
-should get somewhere good on the first evening - without giving up the ceiling
-later.
-
----
-
-## Screenshots
-
-<div align="center">
-
-*The app - effect chain on the left, settings on the right, timeline below.*
-
-<img src="screenshots/app.png" width="900" alt="RIFT main window">
-
-<br>
-
-*Twenty-four effects, from print processes to codec damage.*
-
-<img src="screenshots/effects.png" width="900" alt="Effect gallery">
-
-<br>
-
-*Five audio instruments in one effect: waveform, spectrum, spectrogram,
-stereometer, bands.*
-
-<img src="screenshots/scopes.png" width="900" alt="Oscilloscope modes">
-
-</div>
+- **Real-Time Audio Reactivity**:
+  - Live loopback audio capture and offline audio stem analysis.
+  - Frequency band separation: Sub-Bass, Bass, Mids, Highs, Transients, Centroid, Kick/Snare detection.
+  - Parameter modulation patch bay: map any shader uniform to audio channels with customizable attack/decay smoothing.
+- **Minimeters-Style Visualizers**:
+  - **Oscilloscope**: Sub-sample zero-crossing hysteresis trigger; sharp waveform rendering with dual-pass glow.
+  - **Spectrum Analyzer**: Logarithmic 20 Hz – 20 kHz fluid response with frame-rate independent dB-domain gravity decay.
+  - **Spectrogram**: 2D scrolling waterfall heatmap with 256-entry colormapping (-90 dB to 0 dB).
+  - **Lissajous Vectorscope**: 45° rotated mid/side stereo radar projection with persistence trails.
+- **High-Performance GPU Pipeline**:
+  - Direct3D 11 backend via Qt RHI (QRhi) with dynamic per-pass uniform buffer ring buffering.
+  - 30+ GLSL/QSB shaders: Tunnel, Feedback, Kaleidoscope, Datamosh, Glitch, Ascii, Bloom, Blur, Color Grade, etc.
+  - Multi-lane video/audio timeline with clip trimming, lane compositing, and layer blending.
+- **Offline Export & Batch Queue**:
+  - Hardware-accelerated encoding via NVENC (H.264/HEVC) and ProRes.
+  - Frame-accurate, deterministic offline export where audio reactivity is sampled at exact timestamps (`N / fps`).
+  - Batch render queue with progress tracking and job cancellation.
+- **Brutalist Technical Interface**:
+  - Clean, high-density UI built in Qt Quick/QML with 0px corner radii, 1px hairlines, and fixed channel colors.
+  - Responsive project aspect ratio canvas scaling (16:9, 9:16, 1:1, 4:3, 21:9) and on-screen clip transform controls.
 
 ---
 
-## Download
+## Tech Stack
 
-Grab the latest **`RIFT-0.1.4-setup.exe`** from
-[**Releases**](../../releases/latest), run it, and you're done. Everything the
-app needs is inside - no Qt, no FFmpeg, no runtime to install separately.
-
-**Requirements**
-
-- Windows 10 or 11, 64-bit
-- A GPU supporting Direct3D 11 (roughly anything from 2012 onward)
-
-**Windows will warn you.** The app isn't code-signed yet, so you'll see
-*"Windows protected your PC"*. Click **More info → Run anyway**. Some antivirus
-may also flag a new unsigned program - that's reputation, not detection.
-
----
-
-## What it does
-
-**Bring in anything** - video, images, vectors, text. Multiple clips on stacked
-lanes with blend modes, opacity and transform.
-
-**Twenty-four effects**, chained in any order, each with a blend mode and mix
-amount:
-
-| | |
+| Component | Technology |
 |---|---|
-| **Pattern** | Ascii · Halftone · Dither · Risograph · Terminal |
-| **Damage** | Glitch · Pixel sort · Datamosh |
-| **Photographic** | Cyanotype · Thermal cam · Electron scan · Blur · Lens · Bloom |
-| **Symmetry** | Kaleido · Mirror tile |
-| **Motion** | Flow warp · Feedback · Slit scan |
-| **Geometry** | Voronoi shatter · Dot field · Tunnel |
-| **Audio** | Oscilloscope - waveform, spectrum, spectrogram, stereometer, bands |
-| **Finishing** | Post FX - vignette, grain, scanlines, dither, glass · Colour grade |
-
-**Drive any setting from the music.** Ten channels - bass, mids, highs, drums,
-transients, kick, snare, tempo, brightness, time - patched to any slider with an
-adjustable depth. **No pre-analysis step:** load a `.wav` or `.mp3` and it works.
-
-**Keyframe anything**, with linear, ease or step interpolation - and keyframes
-stack *on top of* audio reactivity, so a parameter can be both automated and
-reactive.
-
-**Beat detection** with snap-to-beat clip dragging, so cuts land on the music.
-
-**Two modes.** *React* builds a piece and exports it. *Live* performs it, mapped
-to a MIDI controller - with a drawn layout for the Arturia MiniLab mk II, plus
-OSC.
-
-**Export** to 1080p, 2K or 4K, several aspect ratios, four quality levels
-including ProRes. The app stays usable while it renders, and a queue batches
-jobs.
-
-Full walkthrough in the [**guide**](GUIDE.md).
+| Core Engine | C++20 |
+| Graphics API | Qt RHI (Direct3D 11 on Windows) |
+| Shaders | GLSL compiled to QSB (SPIR-V / HLSL bytecode) |
+| Media Decoding | FFmpeg (libavcodec, libavformat, libswresample, libswscale) |
+| Audio System | miniaudio + pffft (C++ FFT band analysis) |
+| User Interface | Qt 6 Quick / QML |
+| Build System | CMake 3.24+ / MSVC 2022 |
 
 ---
 
-## Known limitations
+## Building from Source
 
-Honest list, so testers aren't surprised:
+### Prerequisites
+1. **Windows 10/11 (x64)**
+2. **Visual Studio 2022** with C++ Desktop Development workload.
+3. **Qt 6.7+** (with Qt Quick, QML, and QRhi).
+4. **CMake 3.24+**.
+5. **FFmpeg shared libraries / headers** (LGPL or GPL build).
 
-- **Not code-signed** - SmartScreen will warn on first run.
-- **Windows only.** The renderer is Direct3D 11; there's no software fallback.
-- **The Oscilloscope is the most expensive effect**, especially Stereometer.
-  On a heavy chain it can drop the frame rate. The readout at the top right
-  shows the worst recent frame time - amber means it's missing 60 fps.
-- **Datamosh is an approximation.** True datamosh needs the previously decoded
-  frame; this reproduces the macroblock grid, drift and bloom, but a still image
-  won't smear into the next shot. Feedback and Slit scan now do have access to
-  the previous frame, so this one is next in line to use it.
-- **Slit scan builds its history as it plays.** It accumulates from the
-  previous frame rather than holding a buffer of past frames, so it needs about
-  two seconds of run-up and cannot be scrubbed. Give it a lead-in rather than
-  cutting on the first frame.
-- **Tunnel is a raymarcher.** Around 48 steps per pixel. It holds 60 fps here,
-  but it is the second most expensive effect after the Oscilloscope.
-- **Docks swap sides rather than float freely.** Free-floating panels aren't in
-  yet.
+### Build Instructions
 
----
+```powershell
+# Clone the repository
+git clone https://github.com/your-username/RIFT_engine.git
+cd RIFT_engine
 
-## Feedback
+# Configure CMake with Release configuration
+cmake -B build-release -DCMAKE_BUILD_TYPE=Release
 
-Bug reports and impressions are the point of this build. Useful to include:
+# Build rift_shell executable
+cmake --build build-release --config Release --target rift_shell
+```
 
-1. What you did, and what happened instead
-2. Your GPU, and Windows version
-3. The frame rate / worst-frame figure at the top right, if it's a speed problem
+The compiled binary and staged shaders/assets will be generated in `build-release/Release/`.
 
 ---
 
-## Credits
+## CLI Usage & Headless Export
 
-Built by **Revanth Rangisetti**. Designed by a human, written with AI.
+RIFT can be launched as a desktop UI or run headlessly for batch exports:
 
-Wordmark set in *Yessie's brother* by Adele Markova, SUVA Type Foundry.
-Rendering with Qt RHI (Direct3D 11) · decode and encode with FFmpeg · audio with
-miniaudio and pffft. Full notices ship with the application.
+```powershell
+# Open with media and audio preloaded
+./rift_shell.exe --clip "path/to/video.mp4" --audio "path/to/track.wav" --chain "tunnel,bloom"
+
+# Batch render a 3-second export directly from CLI
+./rift_shell.exe --clip "input.mp4" --audio "track.wav" --chain "oscilloscope" --play --export "output.mp4"
+```
+
+---
+
+## License
+
+RIFT is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Third-party notices and licenses are documented in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
