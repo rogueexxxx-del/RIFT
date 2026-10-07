@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.6 - 07 October 2026
+
+Figma design system alignment, unified vector timeline toolbar, improved parameter inspector, and UI layout polish.
+
+### New & Changed (UI)
+
+- **Unified Figma Timeline Toolbar**:
+  - Replaced text buttons (`+ Clip`, `+ Audio`) with dedicated vector action buttons (`add_clip`, `add_audio`).
+  - Added "Stretch until end" tool button (`stretch_end` / `| <-> |`).
+  - Standardized all timeline tool buttons into 28×24 rounded rectangles (radius 4px) with high-contrast icon artwork and clear hover/active/disabled states.
+- **Audio Meter Proportions & Spacing**:
+  - Added clean 8px vertical spacing between audio meter wells and bottom channel tags (`BAS`, `MID`, `HIG`, `DRM`), eliminating text overlap.
+- **Parameters Panel Layout**:
+  - Removed separating hairlines between uniforms for a unified, cohesive inspector flow.
+  - Added automatic title capitalization across all uniform keys (e.g., `Columns`, `Charset`, `Bright`, `Color`, `Dot size`).
+  - Increased spacing between value readout, audio patch chip, and `LINK` button.
+  - Expanded right dock width to 330px (minimum 280px) for comfortable desktop layout breathing room.
+
 ## 0.1.5 - 05 October 2026
 
 Deterministic export render fixes, shader uniform ring-buffering, and brutalist UI redesign.

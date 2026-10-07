@@ -2,6 +2,8 @@
 
 > **Real-time audio-reactive visual engine and GPU effect processor.**
 
+![RIFT Desktop Interface](screenshots/app.png)
+
 RIFT turns music into picture. It runs video footage, images, text, and procedural generators through an audio-driven GPU effect chain, rendering in real time for live performance or exporting frame-accurate videos up to 4K.
 
 ---
