@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.7 - 08 October 2026
+
+Minimalist level meters, Windows UI & WCAG 2.1 AA color contrast compliance, vintage modern film grain, vector brand alignment, and preset management.
+
+### New & Changed (UI)
+
+- **Minimalist Level Meters**:
+  - Removed cluttering dB text columns and labels near levels in audio channel meters and live input strip for clean, distraction-free visual monitoring.
+  - Full-height meter wells with interactive tooltips showing band information and channel names.
+- **Windows UI & WCAG 2.1 AA Color Contrast**:
+  - Upgraded dimmed/muted text tokens (`#808080`, `#A8A8A8`) to guarantee > 4.5:1 / 7:1 contrast ratios on dark surfaces.
+  - High-contrast keyboard shortcut matrix with clear `#D4D4D4` key legends on `#222222` keycaps.
+- **Preset File Operations**:
+  - Added right-click context menu to presets: Rename, Duplicate, Copy JSON, and "Show in File Explorer".
+  - Clean chevron indicators (`▼`/`▶`) replacing plain text labels.
+- **Timeline Polish & Automation**:
+  - Vertical track scrolling with dedicated mouse wheel handling.
+  - Automation keyframe diamonds directly displayed on clips with parameter labels and timing tooltips.
+  - High-density antialiased audio waveform drawing with beveled clip contours.
+- **Brand & Visuals**:
+  - Integrated official vector RIFT logo in title bar and About dialog.
+  - Added subtle vintage modern procedural film grain overlay across the application shell.
+  - Removed wireframe button borders and redundant divider lines across menus and dialogs.
+
 ## 0.1.6 - 07 October 2026
 
 Figma design system alignment, unified vector timeline toolbar, improved parameter inspector, and UI layout polish.
