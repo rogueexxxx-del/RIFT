@@ -1,0 +1,16 @@
+{
+  "id": "glitch",
+  "params": [
+    "block_count",
+    "offset_max",
+    "trigger_thresh",
+    "color_bleed",
+    "time_speed"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

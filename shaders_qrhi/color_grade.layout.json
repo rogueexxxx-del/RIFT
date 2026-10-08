@@ -1,0 +1,19 @@
+{
+  "id": "color_grade",
+  "params": [
+    "lift",
+    "gamma_v",
+    "gain_v",
+    "contrast_v",
+    "saturation",
+    "temperature",
+    "tint",
+    "exposure"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

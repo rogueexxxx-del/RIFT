@@ -1,0 +1,96 @@
+{
+  "id": "terminal",
+  "name": "TERMINAL",
+  "version": 1,
+  "frag": "terminal.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "cols",
+      "label": "COLUMNS",
+      "type": "float",
+      "min": 20.0,
+      "max": 200.0,
+      "step": 1.0,
+      "default": 80.0,
+      "discrete": false
+    },
+    {
+      "name": "phosphor",
+      "label": "PHOSPHOR",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "bleed",
+      "label": "BLEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 2.0,
+      "step": 0.05,
+      "default": 0.8,
+      "discrete": false,
+      "binding": {
+        "channel": "highs",
+        "depth": 0.4,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "scanline",
+      "label": "SCANLINE",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.5,
+      "discrete": false
+    },
+    {
+      "name": "curve",
+      "label": "CURVE",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.25,
+      "discrete": false
+    },
+    {
+      "name": "flicker",
+      "label": "FLICKER",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.15,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

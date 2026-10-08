@@ -1,0 +1,35 @@
+{
+  "id": "post_fx",
+  "params": [
+    "u_vignette",
+    "u_grain_scale",
+    "u_grain_amount",
+    "u_grain_speed",
+    "u_scanline_count",
+    "u_scanline_opacity",
+    "u_dither_levels",
+    "u_dither_scale",
+    "u_dither_mono",
+    "u_dither_bias",
+    "u_halftone_dot",
+    "u_track_feedback",
+    "u_track_zoom",
+    "u_track_rotate",
+    "u_track_warp",
+    "u_glass_crystal",
+    "u_glass_aberration",
+    "u_glass_distortion",
+    "u_glass_pixelate",
+    "u_glass_refract"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ],
+    [
+      "u_feedback_tex",
+      6
+    ]
+  ]
+}

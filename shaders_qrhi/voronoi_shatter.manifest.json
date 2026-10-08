@@ -1,0 +1,96 @@
+{
+  "id": "voronoi_shatter",
+  "name": "SHATTER",
+  "version": 1,
+  "frag": "voronoi_shatter.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "cells",
+      "label": "CELLS",
+      "type": "float",
+      "min": 2.0,
+      "max": 40.0,
+      "step": 1.0,
+      "default": 10.0,
+      "discrete": true
+    },
+    {
+      "name": "split",
+      "label": "SPLIT",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.15,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.8,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "bevel",
+      "label": "BEVEL",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.5,
+      "step": 0.005,
+      "default": 0.08,
+      "discrete": false
+    },
+    {
+      "name": "edge_glow",
+      "label": "EDGE GLOW",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.2,
+      "discrete": false
+    },
+    {
+      "name": "jitter",
+      "label": "JITTER",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.2,
+      "discrete": false,
+      "binding": {
+        "channel": "kick",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "chroma",
+      "label": "CHROMA",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.2,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.0.0 - 08 October 2026
+
+First official release version: Independent per-clip effect architecture, NodeRail right-click workflows, interactive razor tool, freeze-on-pause playback, watermark export removal, top bar monogram branding, and refined dark UI.
+
+### New Features & Improvements
+
+- **Independent Per-Clip Effects**:
+  - Chopping or splitting clips now preserves completely independent GPU effect chains per clip.
+  - Selecting a clip opens its per-clip chain in NodeRail with a dedicated `CLIP X FX` header and a one-click `Master FX` return button.
+  - Clip chains composite independently per layer without altering or hijacking the project's master effect chain.
+- **Node Rail Context Menu & Effect Replacement**:
+  - Right-clicking any effect node opens a context menu with `Change / Replace Effect...`, `Duplicate Effect`, `Reset Parameters`, and `Delete Effect`.
+  - Replaces an effect in-place without losing position or connections in the chain.
+- **Razor Tool & Visual Cutting Line**:
+  - Pressing `C` or clicking the Razor tool button activates an interactive red vertical cutting guide tracking the mouse cursor across timeline tracks.
+  - Precision click-to-cut splits clips at exact timestamps. Pressing `Esc` or clicking selection returns to normal mode.
+  - Disabled drag-and-drop while using the razor tool to prevent accidental movement.
+- **Playback Freeze on Pause**:
+  - Pausing video freezes shader uniforms, feedback buffers, oscilloscope buffers, and FFT analysis immediately.
+- **Watermark Removal at Export**:
+  - Export dialog now includes a watermark toggle button row to render clean videos without the RIFT watermark overlay.
+- **Visual Design & Layout Polish**:
+  - Top menu bar now features the centered RIFT monogram glyph logo (`32px` height) instead of the full wordmark text.
+  - Replaced stark grey toolbar buttons with refined dark buttons (`#181818`, 1px border, light icons) matching the dark interface.
+  - Removed artificial 3px red vertical strips from clip edges; chopped clips now display as clean contiguous segments.
+  - Fixed drop lane highlight so timeline tracks only highlight during active drag-and-drop.
+  - Responsive ChainBlock node width scaling and typography using `Theme.fontUI`.
+
+## 0.1.8 - 08 October 2026
+
+Master effect pipeline compositing fix, independent clip selection, segmented dock tabs, and layer blend mode restoration.
+
+### Bug Fixes & Improvements
+
+- **Master Effect Pipeline**:
+  - The composited timeline output now feeds directly into the project's master `RenderGraph` (`graph_.execute`), ensuring effects like `kaleido`, `bloom`, and `thermal` reliably process all active footage and layers on screen.
+  - Eliminated automatic injection of dummy `ascii` passes onto newly created or selected clips.
+- **Independent Clip Selection**:
+  - Timeline clip selection now properly updates `selectedClip` for trimming, moving, and inspection without clearing, parking, or swapping the project's master Effect Chain.
+  - Selecting a clip no longer switches the Effect Chain rail or forces a different effect.
+- **Segmented Dock Tabs**:
+  - Replaced ambiguous header titles with dedicated interactive tab bars:
+    - Right Dock: `Params` | `Clip` | `Color` | `Queue`
+    - Left Dock: `Effect Chain` | `Presets`
+  - Selecting an effect node in the Effect Chain automatically switches the inspector to `Params` for immediate access to that node's uniforms.
+- **Layer Compositing & Blend Modes**:
+  - Layer 0 compositing over background canvas now enforces `Blend_Normal` to prevent base layers from turning black when multiplying or subtracting against empty buffers.
+  - Multi-layer compositing correctly preserves blend modes, transforms, and opacity before passing the composite into the master effect chain.
+
 ## 0.1.7 - 08 October 2026
 
 Minimalist level meters, Windows UI & WCAG 2.1 AA color contrast compliance, vintage modern film grain, vector brand alignment, and preset management.

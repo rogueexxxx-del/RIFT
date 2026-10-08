@@ -1,0 +1,76 @@
+{
+  "id": "risograph",
+  "name": "RISOGRAPH",
+  "version": 1,
+  "frag": "risograph.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "ink_count",
+      "label": "INKS",
+      "type": "float",
+      "min": 2.0,
+      "max": 4.0,
+      "step": 1.0,
+      "default": 3.0,
+      "discrete": true
+    },
+    {
+      "name": "dot_size",
+      "label": "DOT",
+      "type": "float",
+      "min": 2.0,
+      "max": 20.0,
+      "step": 0.5,
+      "default": 6.0,
+      "discrete": false
+    },
+    {
+      "name": "misreg",
+      "label": "MISREG",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.4,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "ink_weight",
+      "label": "WEIGHT",
+      "type": "float",
+      "min": 0.2,
+      "max": 2.0,
+      "step": 0.05,
+      "default": 1.0,
+      "discrete": false
+    },
+    {
+      "name": "roughness",
+      "label": "ROUGH",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.4,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

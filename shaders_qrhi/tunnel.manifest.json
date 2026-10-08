@@ -1,0 +1,106 @@
+{
+  "id": "tunnel",
+  "name": "TUNNEL",
+  "version": 1,
+  "frag": "tunnel.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "speed",
+      "label": "SPEED",
+      "type": "float",
+      "min": 0,
+      "max": 8,
+      "step": 0.05,
+      "default": 2,
+      "discrete": false,
+      "binding": {
+        "channel": "melody",
+        "depth": 1.5,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "twist",
+      "label": "TWIST",
+      "type": "float",
+      "min": -2,
+      "max": 2,
+      "step": 0.01,
+      "default": 0.4,
+      "discrete": false,
+      "binding": {
+        "channel": "centroid",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "fov",
+      "label": "FOV",
+      "type": "float",
+      "min": 0.3,
+      "max": 2,
+      "step": 0.01,
+      "default": 0.9,
+      "discrete": false
+    },
+    {
+      "name": "fog",
+      "label": "FOG",
+      "type": "float",
+      "min": 0,
+      "max": 3,
+      "step": 0.01,
+      "default": 1,
+      "discrete": false
+    },
+    {
+      "name": "detail",
+      "label": "DETAIL",
+      "type": "float",
+      "min": 0,
+      "max": 2,
+      "step": 0.01,
+      "default": 0.6,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.6,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "palette",
+      "label": "PALETTE",
+      "type": "float",
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "default": 0,
+      "discrete": true
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

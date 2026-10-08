@@ -1,0 +1,76 @@
+{
+  "id": "blur",
+  "name": "BLUR",
+  "version": 1,
+  "frag": "blur.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "blur_mode",
+      "label": "MODE",
+      "type": "float",
+      "min": 0.0,
+      "max": 2.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "blur_radius",
+      "label": "RADIUS",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.05,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "blur_angle",
+      "label": "ANGLE",
+      "type": "float",
+      "min": 0.0,
+      "max": 6.28,
+      "step": 0.05,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "blur_boost",
+      "label": "BOOST",
+      "type": "float",
+      "min": 0.5,
+      "max": 2.5,
+      "step": 0.05,
+      "default": 1.1,
+      "discrete": false,
+      "binding": {
+        "channel": "drums",
+        "depth": 0.4,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

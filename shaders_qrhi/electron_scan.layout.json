@@ -1,0 +1,17 @@
+{
+  "id": "electron_scan",
+  "params": [
+    "beam",
+    "edge_rim",
+    "scan_drift",
+    "charge",
+    "shot_noise",
+    "vignette"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

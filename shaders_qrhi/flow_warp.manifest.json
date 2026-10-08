@@ -1,0 +1,106 @@
+{
+  "id": "flow_warp",
+  "name": "FLOWWARP",
+  "version": 1,
+  "frag": "flow_warp.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "scale",
+      "label": "SCALE",
+      "type": "float",
+      "min": 0.5,
+      "max": 12.0,
+      "step": 0.1,
+      "default": 3.0,
+      "discrete": false
+    },
+    {
+      "name": "warp",
+      "label": "WARP",
+      "type": "float",
+      "min": 0.0,
+      "max": 2.0,
+      "step": 0.01,
+      "default": 0.6,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.8,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "speed",
+      "label": "SPEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.0,
+      "step": 0.01,
+      "default": 0.5,
+      "discrete": false,
+      "binding": {
+        "channel": "melody",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "octaves",
+      "label": "OCTAVES",
+      "type": "float",
+      "min": 1.0,
+      "max": 5.0,
+      "step": 1.0,
+      "default": 3.0,
+      "discrete": true
+    },
+    {
+      "name": "chroma",
+      "label": "CHROMA",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.25,
+      "discrete": false,
+      "binding": {
+        "channel": "highs",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "contrast",
+      "label": "SHEEN",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.4,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

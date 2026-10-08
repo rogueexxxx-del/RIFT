@@ -1,0 +1,37 @@
+{
+  "id": "oscilloscope",
+  "params": [
+    "mode",
+    "gain",
+    "thickness",
+    "tilt",
+    "fill",
+    "grid_amt",
+    "palette",
+    "glow",
+    "mapping",
+    "speed"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ],
+    [
+      "u_audio_texture",
+      3
+    ],
+    [
+      "u_spectro_tex",
+      4
+    ],
+    [
+      "u_lut_tex",
+      5
+    ],
+    [
+      "u_feedback_tex",
+      6
+    ]
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "id": "feedback",
+  "name": "FEEDBACK",
+  "version": 1,
+  "frag": "feedback.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "decay",
+      "label": "DECAY",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.92,
+      "discrete": false
+    },
+    {
+      "name": "zoom",
+      "label": "ZOOM",
+      "type": "float",
+      "min": 0.9,
+      "max": 1.1,
+      "step": 0.001,
+      "default": 1.01,
+      "discrete": false
+    },
+    {
+      "name": "rotate",
+      "label": "ROTATE",
+      "type": "float",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.05,
+      "discrete": false
+    },
+    {
+      "name": "warp",
+      "label": "CURL",
+      "type": "float",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.2,
+      "discrete": false,
+      "binding": {
+        "channel": "melody",
+        "depth": 0.4,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "hue_shift",
+      "label": "HUE DRIFT",
+      "type": "float",
+      "min": -0.2,
+      "max": 0.2,
+      "step": 0.005,
+      "default": 0.01,
+      "discrete": false
+    },
+    {
+      "name": "threshold",
+      "label": "INJECT",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.35,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.3,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    },
+    {
+      "name": "u_feedback_tex",
+      "unit": 1,
+      "source": "feedback"
+    }
+  ]
+}

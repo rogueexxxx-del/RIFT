@@ -1,0 +1,24 @@
+{
+  "id": "composite",
+  "params": [
+    "blend_mode",
+    "opacity",
+    "pos_x",
+    "pos_y",
+    "scale",
+    "crop_x",
+    "crop_y",
+    "crop_w",
+    "crop_h"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ],
+    [
+      "u_under",
+      3
+    ]
+  ]
+}

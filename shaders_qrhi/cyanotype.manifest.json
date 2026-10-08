@@ -1,0 +1,76 @@
+{
+  "id": "cyanotype",
+  "name": "CYANOTYPE",
+  "version": 1,
+  "frag": "cyanotype.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "exposure",
+      "label": "EXPOSURE",
+      "type": "float",
+      "min": 0.2,
+      "max": 3.0,
+      "step": 0.05,
+      "default": 1.0,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.4,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "contrast",
+      "label": "CONTRAST",
+      "type": "float",
+      "min": 0.2,
+      "max": 3.0,
+      "step": 0.05,
+      "default": 1.2,
+      "discrete": false
+    },
+    {
+      "name": "grain",
+      "label": "GRAIN",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.35,
+      "discrete": false
+    },
+    {
+      "name": "wash",
+      "label": "WASH",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.45,
+      "discrete": false
+    },
+    {
+      "name": "edge_burn",
+      "label": "EDGE BURN",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.02,
+      "default": 0.5,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

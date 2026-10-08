@@ -1,0 +1,16 @@
+{
+  "id": "pixel_sort",
+  "params": [
+    "threshold",
+    "max_length",
+    "speed",
+    "color_bleed",
+    "sort_dir"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

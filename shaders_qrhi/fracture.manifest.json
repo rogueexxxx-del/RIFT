@@ -1,0 +1,106 @@
+{
+  "id": "fracture",
+  "name": "FRACTURE",
+  "version": 1,
+  "frag": "fracture.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "slices",
+      "label": "SLICES",
+      "type": "float",
+      "min": 4.0,
+      "max": 80.0,
+      "step": 1.0,
+      "default": 20.0,
+      "discrete": true
+    },
+    {
+      "name": "offset_max",
+      "label": "OFFSET",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.4,
+      "step": 0.005,
+      "default": 0.08,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 1.0,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "decay",
+      "label": "DECAY",
+      "type": "float",
+      "min": 0.5,
+      "max": 0.99,
+      "step": 0.01,
+      "default": 0.88,
+      "discrete": false,
+      "binding": {
+        "channel": "drums",
+        "depth": 0.1,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "color_bleed",
+      "label": "BLEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 4.0,
+      "step": 0.1,
+      "default": 1.2,
+      "discrete": false
+    },
+    {
+      "name": "invert_thresh",
+      "label": "INVERT",
+      "type": "float",
+      "min": 0.5,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.92,
+      "discrete": false
+    },
+    {
+      "name": "glitch_acc",
+      "label": "AMOUNT",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.3,
+      "step": 0.005,
+      "default": 0.08,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.06,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

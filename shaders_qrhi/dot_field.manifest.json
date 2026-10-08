@@ -1,0 +1,96 @@
+{
+  "id": "dot_field",
+  "name": "DOTFIELD",
+  "version": 1,
+  "frag": "dot_field.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "grid",
+      "label": "GRID",
+      "type": "float",
+      "min": 8,
+      "max": 160,
+      "step": 1,
+      "default": 48,
+      "discrete": true,
+      "binding": {
+        "channel": "drums",
+        "depth": 30,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "dot_size",
+      "label": "DOT SIZE",
+      "type": "float",
+      "min": 0.05,
+      "max": 1.5,
+      "step": 0.01,
+      "default": 0.7,
+      "discrete": false
+    },
+    {
+      "name": "depth",
+      "label": "DEPTH",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.4,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.6,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "tilt",
+      "label": "TILT",
+      "type": "float",
+      "min": 0,
+      "max": 2,
+      "step": 0.01,
+      "default": 0.8,
+      "discrete": false
+    },
+    {
+      "name": "shade",
+      "label": "SHADE",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.7,
+      "discrete": false
+    },
+    {
+      "name": "color_mode",
+      "label": "COLOR",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "discrete": true
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

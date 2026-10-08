@@ -1,0 +1,17 @@
+{
+  "id": "fracture",
+  "params": [
+    "slices",
+    "offset_max",
+    "decay",
+    "color_bleed",
+    "invert_thresh",
+    "glitch_acc"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

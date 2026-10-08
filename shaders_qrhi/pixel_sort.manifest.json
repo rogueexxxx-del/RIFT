@@ -1,0 +1,96 @@
+{
+  "id": "pixel_sort",
+  "name": "PIXEL SORT",
+  "version": 1,
+  "frag": "pixel_sort.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "threshold",
+      "label": "THRESHOLD",
+      "type": "float",
+      "min": 0.1,
+      "max": 0.95,
+      "step": 0.01,
+      "default": 0.5,
+      "discrete": false,
+      "binding": {
+        "channel": "melody",
+        "depth": -0.2,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "max_length",
+      "label": "STREAK LEN",
+      "type": "float",
+      "min": 0.05,
+      "max": 0.6,
+      "step": 0.01,
+      "default": 0.25,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.15,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "speed",
+      "label": "SPEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 5.0,
+      "step": 0.1,
+      "default": 1.0,
+      "discrete": false,
+      "binding": {
+        "channel": "bpm",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "color_bleed",
+      "label": "CHROMA",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.03,
+      "step": 0.001,
+      "default": 0.005,
+      "discrete": false
+    },
+    {
+      "name": "sort_dir",
+      "label": "DIRECTION",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

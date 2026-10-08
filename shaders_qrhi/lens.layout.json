@@ -1,0 +1,17 @@
+{
+  "id": "lens",
+  "params": [
+    "distortion",
+    "aberration",
+    "streak",
+    "streak_angle",
+    "vignette",
+    "falloff"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

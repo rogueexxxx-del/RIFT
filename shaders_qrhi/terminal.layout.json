@@ -1,0 +1,17 @@
+{
+  "id": "terminal",
+  "params": [
+    "cols",
+    "phosphor",
+    "bleed",
+    "scanline",
+    "curve",
+    "flicker"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

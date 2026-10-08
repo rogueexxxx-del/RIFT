@@ -1,0 +1,17 @@
+{
+  "id": "thermal",
+  "params": [
+    "palette",
+    "t_low",
+    "t_high",
+    "bloom",
+    "sensor",
+    "posterize"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

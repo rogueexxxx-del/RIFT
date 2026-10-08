@@ -1,0 +1,17 @@
+{
+  "id": "tunnel",
+  "params": [
+    "speed",
+    "twist",
+    "fov",
+    "fog",
+    "detail",
+    "palette"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

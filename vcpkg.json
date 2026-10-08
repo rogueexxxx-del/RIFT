@@ -1,0 +1,20 @@
+{
+  "name": "rift-engine",
+  "version": "0.1.0",
+  "description": "Audio-reactive shader engine (C++/Qt RHI rewrite of RIFT)",
+  "$comment-qtbase-features": "png and jpeg are not optional extras. With default-features off, Qt ships no PNG or JPEG image plugin, so every QML Image and the Basic style's own assets silently fail to load. Removing them here would break image loading again; changing this list forces a multi-hour Qt rebuild on the next configure.",
+  "dependencies": [
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [ "gui", "png", "jpeg" ]
+    },
+    "qtshadertools",
+    "qtdeclarative",
+    "qtquickcontrols2",
+    "pffft",
+    "miniaudio"
+  ],
+  "builtin-baseline": "908da3a305a0a8028d9602ab241b433652b3df69",
+  "overrides": []
+}

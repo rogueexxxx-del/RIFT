@@ -1,6 +1,49 @@
-# This repo carries the RELEASE and its documentation, not the source.
-# Builds are attached to GitHub Releases, never committed: GitHub rejects any
-# file over 100 MB, and a binary that large would sit in git history forever.
-*.zip
-*.exe
+# ── RIFT Engine Git Ignore ──
+
+# Build directories and build trees
+build/
+build-*/
 dist/
+dist-*/
+out/
+vcpkg_installed/
+.vs/
+*.user
+*.suo
+
+# Binary targets and archives
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.zip
+*.7z
+*.tar.gz
+
+# Render dumps, test video exports, and scratch artifacts
+*.mp4
+*.ppm
+*.wav
+*.avi
+*.mov
+*.mkv
+*.log
+*.csv
+
+# Scratch inspection files & temporary scripts
+test_*.png
+test_*.log
+capture_*.ps1
+find_*.ps1
+launch_*.ps1
+run_debug.ps1
+node_7_*.json
+understanding-*.json
+parse_figma.py
+patch_qml_cpp.py
+update_asset_paths.py
+__pycache__/
+*.pyc

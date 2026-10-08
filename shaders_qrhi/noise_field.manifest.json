@@ -1,0 +1,96 @@
+{
+  "id": "noise_field",
+  "name": "NOISE FIELD",
+  "version": 1,
+  "frag": "noise_field.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "nf_scale",
+      "label": "SCALE",
+      "type": "float",
+      "min": 0.5,
+      "max": 12.0,
+      "step": 0.1,
+      "default": 3.0,
+      "discrete": false
+    },
+    {
+      "name": "nf_amount",
+      "label": "AMOUNT",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.3,
+      "step": 0.005,
+      "default": 0.03,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.1,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "nf_speed",
+      "label": "SPEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 4.0,
+      "step": 0.05,
+      "default": 0.8,
+      "discrete": false
+    },
+    {
+      "name": "nf_warp",
+      "label": "WARP",
+      "type": "float",
+      "min": 0.0,
+      "max": 2.0,
+      "step": 0.05,
+      "default": 0.4,
+      "discrete": false,
+      "binding": {
+        "channel": "melody",
+        "depth": 0.6,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "nf_chroma",
+      "label": "CHROMA",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.03,
+      "step": 0.001,
+      "default": 0.004,
+      "discrete": false,
+      "binding": {
+        "channel": "highs",
+        "depth": 0.008,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

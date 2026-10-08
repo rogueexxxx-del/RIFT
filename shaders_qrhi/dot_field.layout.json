@@ -1,0 +1,17 @@
+{
+  "id": "dot_field",
+  "params": [
+    "grid",
+    "dot_size",
+    "depth",
+    "tilt",
+    "shade",
+    "color_mode"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

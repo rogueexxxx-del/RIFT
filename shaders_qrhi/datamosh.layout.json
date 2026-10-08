@@ -1,0 +1,22 @@
+{
+  "id": "datamosh",
+  "params": [
+    "block",
+    "smear",
+    "bloom_amt",
+    "iframe",
+    "chroma",
+    "rate",
+    "persist"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ],
+    [
+      "u_feedback_tex",
+      6
+    ]
+  ]
+}

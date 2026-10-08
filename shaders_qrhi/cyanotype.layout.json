@@ -1,0 +1,16 @@
+{
+  "id": "cyanotype",
+  "params": [
+    "exposure",
+    "contrast",
+    "grain",
+    "wash",
+    "edge_burn"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

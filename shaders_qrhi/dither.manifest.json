@@ -1,0 +1,86 @@
+{
+  "id": "dither",
+  "name": "DITHER",
+  "version": 1,
+  "frag": "dither.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "levels",
+      "label": "LEVELS",
+      "type": "float",
+      "min": 2.0,
+      "max": 32.0,
+      "step": 1.0,
+      "default": 4.0,
+      "discrete": true,
+      "binding": {
+        "channel": "melody",
+        "depth": 8.0,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "bayer_scale",
+      "label": "GRAIN SIZE",
+      "type": "float",
+      "min": 1.0,
+      "max": 16.0,
+      "step": 1.0,
+      "default": 4.0,
+      "discrete": true
+    },
+    {
+      "name": "color_mode",
+      "label": "MODE",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "threshold_bias",
+      "label": "BIAS",
+      "type": "float",
+      "min": -0.5,
+      "max": 0.5,
+      "step": 0.01,
+      "default": 0.0,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.3,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "contrast",
+      "label": "CONTRAST",
+      "type": "float",
+      "min": 0.5,
+      "max": 3.0,
+      "step": 0.05,
+      "default": 1.0,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "kaleido",
+  "params": [
+    "segments",
+    "twist",
+    "zoom",
+    "cx",
+    "cy",
+    "edge_fade",
+    "feather"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

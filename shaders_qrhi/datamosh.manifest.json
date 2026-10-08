@@ -1,0 +1,121 @@
+{
+  "id": "datamosh",
+  "name": "DATAMOSH",
+  "version": 1,
+  "frag": "datamosh.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "block",
+      "label": "BLOCK",
+      "type": "float",
+      "min": 4,
+      "max": 96,
+      "step": 1,
+      "default": 24,
+      "discrete": false
+    },
+    {
+      "name": "smear",
+      "label": "SMEAR",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.02,
+      "default": 0.5,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.7,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "bloom_amt",
+      "label": "BLOOM",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.02,
+      "default": 0.4,
+      "discrete": false
+    },
+    {
+      "name": "iframe",
+      "label": "I-FRAME",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.02,
+      "default": 0.3,
+      "discrete": false,
+      "binding": {
+        "channel": "kick",
+        "depth": 0.8,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "chroma",
+      "label": "CHROMA",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.02,
+      "default": 0.5,
+      "discrete": false
+    },
+    {
+      "name": "rate",
+      "label": "RATE",
+      "type": "float",
+      "min": 0.1,
+      "max": 8,
+      "step": 0.1,
+      "default": 2,
+      "discrete": false
+    },
+    {
+      "name": "persist",
+      "label": "PERSIST",
+      "type": "float",
+      "min": 0,
+      "max": 0.98,
+      "step": 0.01,
+      "default": 0.85,
+      "discrete": false,
+      "binding": {
+        "channel": "kick",
+        "depth": 0.1,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    },
+    {
+      "name": "u_feedback_tex",
+      "unit": 1,
+      "source": "feedback"
+    }
+  ]
+}

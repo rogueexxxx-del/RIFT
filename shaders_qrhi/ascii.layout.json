@@ -1,0 +1,16 @@
+{
+  "id": "ascii",
+  "params": [
+    "columns",
+    "char_set",
+    "brightness",
+    "color_mode",
+    "dot_size"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

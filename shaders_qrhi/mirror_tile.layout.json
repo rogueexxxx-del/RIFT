@@ -1,0 +1,17 @@
+{
+  "id": "mirror_tile",
+  "params": [
+    "tiles_x",
+    "tiles_y",
+    "mode",
+    "offset",
+    "scroll",
+    "seam"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

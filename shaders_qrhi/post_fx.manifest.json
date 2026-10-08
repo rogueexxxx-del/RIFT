@@ -1,0 +1,221 @@
+{
+  "id": "post_fx",
+  "name": "Output",
+  "version": 1,
+  "frag": "post_fx.frag",
+  "category": "output",
+  "uniforms": [
+    {
+      "name": "u_vignette",
+      "label": "VIGNETTE",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.05,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_grain_scale",
+      "label": "GRAIN SCALE",
+      "type": "float",
+      "min": 0.1,
+      "max": 10.0,
+      "step": 0.1,
+      "default": 2.0,
+      "discrete": false
+    },
+    {
+      "name": "u_grain_amount",
+      "label": "GRAIN OPACITY",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.5,
+      "step": 0.01,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_grain_speed",
+      "label": "GRAIN SPEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 5.0,
+      "step": 0.1,
+      "default": 1.0,
+      "discrete": false
+    },
+    {
+      "name": "u_scanline_count",
+      "label": "SCANLINES",
+      "type": "float",
+      "min": 0.0,
+      "max": 800.0,
+      "step": 10.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "u_scanline_opacity",
+      "label": "SCAN OPACITY",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.05,
+      "default": 0.15,
+      "discrete": false
+    },
+    {
+      "name": "u_dither_levels",
+      "label": "DITHER LVLS",
+      "type": "float",
+      "min": 2.0,
+      "max": 64.0,
+      "step": 1.0,
+      "default": 8.0,
+      "discrete": true
+    },
+    {
+      "name": "u_dither_scale",
+      "label": "DITHER SCALE",
+      "type": "float",
+      "min": 1.0,
+      "max": 16.0,
+      "step": 1.0,
+      "default": 4.0,
+      "discrete": true
+    },
+    {
+      "name": "u_dither_mono",
+      "label": "DITHER MONO",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "u_dither_bias",
+      "label": "DITHER BIAS",
+      "type": "float",
+      "min": -0.5,
+      "max": 0.5,
+      "step": 0.05,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_halftone_dot",
+      "label": "HALFTONE DOT",
+      "type": "float",
+      "min": 0.0,
+      "max": 20.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "u_track_feedback",
+      "label": "FEEDBACK",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.99,
+      "step": 0.01,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_track_zoom",
+      "label": "FEEDBACK ZOOM",
+      "type": "float",
+      "min": 0.9,
+      "max": 1.1,
+      "step": 0.002,
+      "default": 1.0,
+      "discrete": false
+    },
+    {
+      "name": "u_track_rotate",
+      "label": "FEEDBACK ROTATE",
+      "type": "float",
+      "min": -0.5,
+      "max": 0.5,
+      "step": 0.01,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_track_warp",
+      "label": "FEEDBACK WARP",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.1,
+      "step": 0.005,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_glass_crystal",
+      "label": "CRYSTAL",
+      "type": "float",
+      "min": 0.0,
+      "max": 100.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "u_glass_aberration",
+      "label": "ABERRATION",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.1,
+      "step": 0.002,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_glass_distortion",
+      "label": "DISTORTION",
+      "type": "float",
+      "min": -0.5,
+      "max": 0.5,
+      "step": 0.02,
+      "default": 0.0,
+      "discrete": false
+    },
+    {
+      "name": "u_glass_pixelate",
+      "label": "PIXELATE",
+      "type": "float",
+      "min": 0.0,
+      "max": 200.0,
+      "step": 5.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "u_glass_refract",
+      "label": "REFRACT",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.5,
+      "step": 0.01,
+      "default": 0.05,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    },
+    {
+      "name": "u_feedback_tex",
+      "unit": 1,
+      "source": "feedback"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+// Windows resources for rift_shell.exe.
+//
+// Without this the exe has a blank generic icon and empty file properties,
+// which is what makes a build look like a build rather than an application.
+// Explorer, the taskbar, Alt-Tab and any installer all read from here.
+//
+// Deliberately includes NO headers. rc.exe is handed the target's whole include
+// path, and with Qt's private include directories on it that command line
+// overflows Windows' limit - the build fails with a bare "The filename or
+// extension is too long". The handful of constants windows.h would supply are
+// spelled out below instead; they are fixed by the PE format and cannot change.
+
+#define VS_FFI_FILEFLAGSMASK 0x0000003FL
+#define VS_FF_DEBUG          0x00000001L
+#define VOS_NT_WINDOWS32     0x00040004L
+#define VFT_APP              0x00000001L
+#define VFT2_UNKNOWN         0x00000000L
+#define VS_VERSION_INFO      1
+
+// IDI_ICON1 (=101) by convention: Windows shows the numerically lowest icon
+// resource as the application icon, so this must stay the first one declared.
+101 ICON "rift.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    0,1,3,0
+ PRODUCTVERSION 0,1,3,0
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS      VS_FF_DEBUG
+#else
+ FILEFLAGS      0x0L
+#endif
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // 040904B0 = US English, Unicode. Must match the Translation value
+        // below or Explorer shows nothing at all.
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Revanth Rangisetti"
+            VALUE "FileDescription",  "RIFT - audio-reactive visuals"
+            VALUE "FileVersion",      "0.1.3.0"
+            VALUE "InternalName",     "rift_shell"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Revanth Rangisetti"
+            VALUE "OriginalFilename", "rift_shell.exe"
+            VALUE "ProductName",      "RIFT"
+            VALUE "ProductVersion",   "0.1.3.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

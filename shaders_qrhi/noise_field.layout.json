@@ -1,0 +1,16 @@
+{
+  "id": "noise_field",
+  "params": [
+    "nf_scale",
+    "nf_amount",
+    "nf_speed",
+    "nf_warp",
+    "nf_chroma"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

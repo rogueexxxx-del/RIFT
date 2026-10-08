@@ -1,0 +1,17 @@
+{
+  "id": "voronoi_shatter",
+  "params": [
+    "cells",
+    "split",
+    "bevel",
+    "edge_glow",
+    "jitter",
+    "chroma"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

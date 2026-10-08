@@ -1,0 +1,16 @@
+{
+  "id": "dither",
+  "params": [
+    "levels",
+    "bayer_scale",
+    "color_mode",
+    "threshold_bias",
+    "contrast"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

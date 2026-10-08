@@ -1,0 +1,86 @@
+{
+  "id": "bloom",
+  "name": "BLOOM",
+  "version": 1,
+  "frag": "bloom.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "threshold",
+      "label": "THRESHOLD",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.65,
+      "discrete": false
+    },
+    {
+      "name": "knee",
+      "label": "KNEE",
+      "type": "float",
+      "min": 0.01,
+      "max": 0.5,
+      "step": 0.01,
+      "default": 0.15,
+      "discrete": false
+    },
+    {
+      "name": "radius",
+      "label": "RADIUS",
+      "type": "float",
+      "min": 0,
+      "max": 0.2,
+      "step": 0.005,
+      "default": 0.05,
+      "discrete": false
+    },
+    {
+      "name": "intensity",
+      "label": "INTENSITY",
+      "type": "float",
+      "min": 0,
+      "max": 3,
+      "step": 0.01,
+      "default": 0.8,
+      "discrete": false,
+      "binding": {
+        "channel": "drums",
+        "depth": 0.8,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "tint",
+      "label": "TINT",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.5,
+      "discrete": false
+    },
+    {
+      "name": "chroma",
+      "label": "CHROMA",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.2,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "id": "halftone",
+  "name": "HALFTONE",
+  "version": 1,
+  "frag": "halftone.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "ht_scale",
+      "label": "DOT SIZE",
+      "type": "float",
+      "min": 3.0,
+      "max": 40.0,
+      "step": 0.5,
+      "default": 9.0,
+      "discrete": false,
+      "binding": {
+        "channel": "drums",
+        "depth": 6.0,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "ht_angle",
+      "label": "ANGLE",
+      "type": "float",
+      "min": 0.0,
+      "max": 3.14,
+      "step": 0.02,
+      "default": 0.785,
+      "discrete": false
+    },
+    {
+      "name": "ht_mode",
+      "label": "MODE",
+      "type": "float",
+      "min": 0.0,
+      "max": 2.0,
+      "step": 1.0,
+      "default": 0.0,
+      "discrete": true
+    },
+    {
+      "name": "ht_contrast",
+      "label": "CONTRAST",
+      "type": "float",
+      "min": 0.3,
+      "max": 3.0,
+      "step": 0.05,
+      "default": 1.2,
+      "discrete": false,
+      "binding": {
+        "channel": "bass",
+        "depth": 0.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "ht_soft",
+      "label": "SOFTNESS",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.2,
+      "step": 0.005,
+      "default": 0.04,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

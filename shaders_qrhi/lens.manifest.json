@@ -1,0 +1,96 @@
+{
+  "id": "lens",
+  "name": "LENS",
+  "version": 1,
+  "frag": "lens.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "distortion",
+      "label": "DISTORT",
+      "type": "float",
+      "min": -0.6,
+      "max": 0.6,
+      "step": 0.01,
+      "default": -0.15,
+      "discrete": false
+    },
+    {
+      "name": "aberration",
+      "label": "FRINGE",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.3,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 0.4,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "streak",
+      "label": "STREAK",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "discrete": false,
+      "binding": {
+        "channel": "highs",
+        "depth": 0.4,
+        "curve": "lin",
+        "attack": 0,
+        "release": 0,
+        "in_lo": 0,
+        "in_hi": 1,
+        "invert": false
+      }
+    },
+    {
+      "name": "streak_angle",
+      "label": "ANGLE",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0,
+      "discrete": false
+    },
+    {
+      "name": "vignette",
+      "label": "VIGNETTE",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.4,
+      "discrete": false
+    },
+    {
+      "name": "falloff",
+      "label": "FALLOFF",
+      "type": "float",
+      "min": 0.05,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.45,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "flow_warp",
+  "params": [
+    "scale",
+    "warp",
+    "speed",
+    "octaves",
+    "chroma",
+    "contrast"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

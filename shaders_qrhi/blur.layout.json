@@ -1,0 +1,15 @@
+{
+  "id": "blur",
+  "params": [
+    "blur_mode",
+    "blur_radius",
+    "blur_angle",
+    "blur_boost"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

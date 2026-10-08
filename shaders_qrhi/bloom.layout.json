@@ -1,0 +1,17 @@
+{
+  "id": "bloom",
+  "params": [
+    "threshold",
+    "knee",
+    "radius",
+    "intensity",
+    "tint",
+    "chroma"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "id": "kaleido",
+  "name": "KALEIDO",
+  "version": 1,
+  "frag": "kaleido.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "segments",
+      "label": "SEGMENTS",
+      "type": "float",
+      "min": 2.0,
+      "max": 24.0,
+      "step": 1.0,
+      "default": 6.0,
+      "discrete": true,
+      "binding": {
+        "channel": "snare",
+        "depth": 4.0,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "twist",
+      "label": "TWIST",
+      "type": "float",
+      "min": -2.0,
+      "max": 2.0,
+      "step": 0.01,
+      "default": 0.25,
+      "discrete": false,
+      "binding": {
+        "channel": "melody",
+        "depth": 0.6,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "zoom",
+      "label": "ZOOM",
+      "type": "float",
+      "min": 0.2,
+      "max": 3.0,
+      "step": 0.01,
+      "default": 1.0,
+      "discrete": false
+    },
+    {
+      "name": "cx",
+      "label": "CENTRE X",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.5,
+      "discrete": false
+    },
+    {
+      "name": "cy",
+      "label": "CENTRE Y",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.5,
+      "discrete": false
+    },
+    {
+      "name": "edge_fade",
+      "label": "EDGE FADE",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 0.3,
+      "discrete": false
+    },
+    {
+      "name": "feather",
+      "label": "FEATHER",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.2,
+      "step": 0.005,
+      "default": 0.02,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}

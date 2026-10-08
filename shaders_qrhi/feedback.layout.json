@@ -1,0 +1,21 @@
+{
+  "id": "feedback",
+  "params": [
+    "decay",
+    "zoom",
+    "rotate",
+    "warp",
+    "hue_shift",
+    "threshold"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ],
+    [
+      "u_feedback_tex",
+      6
+    ]
+  ]
+}

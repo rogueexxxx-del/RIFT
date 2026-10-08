@@ -1,0 +1,21 @@
+{
+  "id": "slit_scan",
+  "params": [
+    "axis",
+    "span",
+    "curve",
+    "offset",
+    "mix_amt",
+    "sharpen"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ],
+    [
+      "u_feedback_tex",
+      6
+    ]
+  ]
+}

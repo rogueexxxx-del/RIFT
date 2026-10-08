@@ -1,0 +1,16 @@
+{
+  "id": "halftone",
+  "params": [
+    "ht_scale",
+    "ht_angle",
+    "ht_mode",
+    "ht_contrast",
+    "ht_soft"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

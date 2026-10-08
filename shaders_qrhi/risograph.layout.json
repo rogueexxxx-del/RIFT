@@ -1,0 +1,16 @@
+{
+  "id": "risograph",
+  "params": [
+    "ink_count",
+    "dot_size",
+    "misreg",
+    "ink_weight",
+    "roughness"
+  ],
+  "samplers": [
+    [
+      "u_tex",
+      2
+    ]
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "id": "glitch",
+  "name": "GLITCH",
+  "version": 1,
+  "frag": "glitch.frag",
+  "category": "generator",
+  "uniforms": [
+    {
+      "name": "block_count",
+      "label": "BLOCKS",
+      "type": "float",
+      "min": 4.0,
+      "max": 120.0,
+      "step": 2.0,
+      "default": 30.0,
+      "discrete": true,
+      "binding": {
+        "channel": "melody",
+        "depth": 20.0,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "offset_max",
+      "label": "OFFSET",
+      "type": "float",
+      "min": 0.0,
+      "max": 0.5,
+      "step": 0.005,
+      "default": 0.1,
+      "discrete": false,
+      "binding": {
+        "channel": "transient",
+        "depth": 1.5,
+        "curve": "lin",
+        "attack": 0.0,
+        "release": 0.0,
+        "in_lo": 0.0,
+        "in_hi": 1.0,
+        "invert": false
+      }
+    },
+    {
+      "name": "trigger_thresh",
+      "label": "THRESHOLD",
+      "type": "float",
+      "min": 0.05,
+      "max": 0.99,
+      "step": 0.01,
+      "default": 0.5,
+      "discrete": false
+    },
+    {
+      "name": "color_bleed",
+      "label": "BLEED",
+      "type": "float",
+      "min": 0.0,
+      "max": 5.0,
+      "step": 0.1,
+      "default": 2.0,
+      "discrete": false
+    },
+    {
+      "name": "time_speed",
+      "label": "SPEED",
+      "type": "float",
+      "min": 0.5,
+      "max": 20.0,
+      "step": 0.5,
+      "default": 4.0,
+      "discrete": false
+    }
+  ],
+  "samplers": [
+    {
+      "name": "u_tex",
+      "unit": 0,
+      "source": "upstream"
+    }
+  ]
+}
