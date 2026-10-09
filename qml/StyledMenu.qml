@@ -35,11 +35,15 @@ Menu {
                  : mi.highlighted ? "#FFFFFF" : "#CCCCCC"
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeSmall
+            font.weight: mi.highlighted ? Font.Medium : Font.Normal
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            color: mi.highlighted ? "#262626" : "transparent"
+            color: mi.highlighted ? "#222222" : "transparent"
             radius: 3
+            border.width: mi.highlighted ? 1 : 0
+            border.color: "#333333"
         }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
     }
 }

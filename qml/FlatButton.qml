@@ -19,14 +19,21 @@ Item {
     implicitWidth: txt.implicitWidth + (ctl.small ? 14 : 22)
 
     Rectangle {
+        id: bgRect
         anchors.fill: parent
-        radius: 4
-        color: ctl.active ? (tap.pressed ? Theme.accent : (hover.hovered ? Theme.accentPressed : Theme.accent))
+        radius: Theme.radius
+        color: ctl.active ? (tap.pressed ? Theme.accentPressed : (hover.hovered ? Theme.accentPressed : Theme.accent))
                           : (tap.pressed ? Theme.bg
                                          : (hover.hovered ? Theme.hover
                                                           : Theme.raised))
-        border.width: ctl.active ? 0 : (hover.hovered ? 1 : 0)
-        border.color: hover.hovered ? Theme.borderHover : "transparent"
+        border.width: 1
+        border.color: ctl.active ? Theme.accent
+                     : (hover.hovered ? Theme.borderHover : Theme.hairline)
+
+        scale: tap.pressed ? 0.97 : (hover.hovered ? 1.01 : 1.0)
+        Behavior on scale { NumberAnimation { duration: 70; easing.type: Easing.OutQuad } }
+        Behavior on color { ColorAnimation { duration: 90 } }
+        Behavior on border.color { ColorAnimation { duration: 90 } }
     }
     Text {
         id: txt
@@ -35,8 +42,9 @@ Item {
         color: ctl.active ? Theme.onAccent : (ctl.enabledLook ? Theme.text : Theme.textDisabled)
         font.family: Theme.fontUI
         font.pixelSize: ctl.small ? Theme.sizeSmall : Theme.size
+        font.weight: ctl.active ? Font.SemiBold : Font.Medium
     }
-    HoverHandler { id: hover }
+    HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; onTapped: ctl.clicked() }
     ToolTipArea { text: ctl.tip }
 }

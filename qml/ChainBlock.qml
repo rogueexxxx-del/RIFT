@@ -19,12 +19,23 @@ Rectangle {
     readonly property color nodeColor: isSource ? "#333333"
                                      : (isOutput ? "#1F1F1F" : Theme.effectColor(effectId))
 
+    readonly property color textColor: {
+        if (blk.isSource || blk.isOutput) return "#FFFFFF"
+        const lum = 0.299 * nodeColor.r + 0.587 * nodeColor.g + 0.114 * nodeColor.b
+        return lum > 0.45 ? "#000000" : "#FFFFFF"
+    }
+    readonly property color subColor: {
+        if (blk.isSource || blk.isOutput) return "#AAAAAA"
+        const lum = 0.299 * nodeColor.r + 0.587 * nodeColor.g + 0.114 * nodeColor.b
+        return lum > 0.45 ? "#333333" : "#CCCCCC"
+    }
+
     implicitWidth: 225
     implicitHeight: 50
     radius: 0
     color: nodeColor
-    border.width: blk.active ? 2 : 0
-    border.color: blk.active ? "#FFFFFF" : "transparent"
+    border.width: blk.active ? 2 : 1
+    border.color: blk.active ? "#FFFFFF" : "#1A1A1A"
 
     // Preview thumbnail background with subtle blend
     Image {
@@ -77,7 +88,7 @@ Rectangle {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: blk.label.toLowerCase()
-            color: blk.isSource || blk.isOutput ? "#FFFFFF" : "#000000"
+            color: blk.textColor
             font.family: Theme.fontUI
             font.pixelSize: blk.isSource || blk.isOutput ? 14 : (text.length > 12 ? 15 : 18)
             font.weight: Font.DemiBold
@@ -88,7 +99,7 @@ Rectangle {
             visible: blk.sub !== ""
             anchors.horizontalCenter: parent.horizontalCenter
             text: blk.sub
-            color: blk.isSource || blk.isOutput ? "#AAAAAA" : "#222222"
+            color: blk.subColor
             font.family: Theme.fontUI
             font.pixelSize: 10
             elide: Text.ElideMiddle

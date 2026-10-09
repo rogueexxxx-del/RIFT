@@ -13,6 +13,15 @@ Rectangle {
     color: "#000000"
     implicitHeight: 120
 
+    // Top hairline border
+    Rectangle {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 1
+        color: Theme.hairline
+    }
+
     // Filter down to the main 4 bands from viewport.channelNames
     readonly property var mainBands: [
         { name: "BASS", abbrev: "BAS", color: Theme.channelColor("BASS"), index: 0 },
@@ -87,9 +96,9 @@ Rectangle {
                     id: bandWell
                     anchors.fill: parent
                     radius: 2
-                    color: "#141414"
-                    border.width: bandItem.lit ? 1 : 0
-                    border.color: "#FFFFFF"
+                    color: "#121212"
+                    border.width: 1
+                    border.color: bandItem.lit ? "#FFFFFF" : "#242424"
 
                     // Upward level fill
                     Rectangle {

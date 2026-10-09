@@ -27,19 +27,22 @@ MenuBar {
         padding: 0
         contentItem: Text {
             text: mbi.text
-            color: mbi.highlighted ? "#FFFFFF" : "#E2E2E2"
+            color: mbi.highlighted ? "#FFFFFF" : "#D4D4D4"
             font.family: Theme.fontUI
-            font.pixelSize: 13
-            font.weight: Font.Normal
+            font.pixelSize: 12
+            font.weight: Font.Medium
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            implicitWidth: mbi.contentItem.implicitWidth + 20
-            implicitHeight: 30
-            radius: 4
-            color: mbi.highlighted ? "#222222" : "transparent"
+            implicitWidth: mbi.contentItem.implicitWidth + 18
+            implicitHeight: 28
+            radius: Theme.radius
+            color: mbi.highlighted ? "#1F1F1F" : "transparent"
+            border.width: mbi.highlighted ? 1 : 0
+            border.color: "#333333"
         }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
     }
 
     // Named entry points so keyboard shortcuts and menu items trigger exactly

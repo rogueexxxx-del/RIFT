@@ -73,6 +73,14 @@ Item {
                 implicitHeight: 36
                 color: "#000000"
 
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: Theme.hairline
+                }
+
                 // Left: ◀ / ▶ collapse button
                 Text {
                     anchors.left: parent.left
@@ -158,25 +166,30 @@ Item {
 
     // ── resize handle ──
     Rectangle {
-        width: 4
+        width: 1
         height: parent.height
         visible: !dock.collapsed
         anchors.right: dock.handleEdge === "right" ? parent.right : undefined
         anchors.left:  dock.handleEdge === "left"  ? parent.left  : undefined
-        color: grab.active || hoverH.hovered ? Theme.accent : "transparent"
-        opacity: grab.active ? 1.0 : 0.6
+        color: grab.active || hoverH.hovered ? Theme.accent : Theme.hairline
+        z: 10
 
-        HoverHandler { id: hoverH; cursorShape: Qt.SizeHorCursor }
-        DragHandler {
-            id: grab
-            target: null
-            yAxis.enabled: false
-            onTranslationChanged: {
-                // Dragging the handle on the LEFT edge of a right-hand dock
-                // grows it in the opposite direction to the cursor.
-                const d = dock.handleEdge === "right" ? translation.x : -translation.x
-                dock.expandedWidth = Math.max(dock.minWidth,
-                                     Math.min(dock.maxWidth, dock.expandedWidth + d))
+        // Expanded interactive hit zone
+        Item {
+            anchors.centerIn: parent
+            width: 8
+            height: parent.height
+
+            HoverHandler { id: hoverH; cursorShape: Qt.SizeHorCursor }
+            DragHandler {
+                id: grab
+                target: null
+                yAxis.enabled: false
+                onTranslationChanged: {
+                    const d = dock.handleEdge === "right" ? translation.x : -translation.x
+                    dock.expandedWidth = Math.max(dock.minWidth,
+                                         Math.min(dock.maxWidth, dock.expandedWidth + d))
+                }
             }
         }
     }

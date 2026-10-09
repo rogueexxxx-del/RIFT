@@ -364,12 +364,19 @@ Rectangle {
                         opacity: 0.28
                     }
 
+                    readonly property color cardTextColor: {
+                        const c = Theme.effectColor(modelData)
+                        const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+                        return lum > 0.45 ? "#000000" : "#FFFFFF"
+                    }
+
                     // Top bracket cap
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.top
-                        width: 12
-                        height: 3
+                        anchors.topMargin: -2
+                        width: 13
+                        height: 4
                         color: "#FFFFFF"
                         border.width: 1
                         border.color: "#000000"
@@ -379,18 +386,19 @@ Rectangle {
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        width: 12
-                        height: 3
+                        anchors.bottomMargin: -2
+                        width: 13
+                        height: 4
                         color: "#FFFFFF"
                         border.width: 1
                         border.color: "#000000"
                     }
 
-                    // Centered black title matching Effect Chain
+                    // Centered title matching Effect Chain with dynamic contrast
                     Text {
                         anchors.centerIn: parent
                         text: Theme.nice(modelData).toLowerCase()
-                        color: "#000000"
+                        color: parent.cardTextColor
                         font.family: Theme.fontUI
                         font.pixelSize: 18
                         font.weight: Font.DemiBold

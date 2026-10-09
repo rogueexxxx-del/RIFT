@@ -12,6 +12,15 @@ Rectangle {
     implicitHeight: Theme.toolbar
     color: "#000000"
 
+    // Top hairline border
+    Rectangle {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 1
+        color: Theme.hairline
+    }
+
     Item {
         anchors.fill: parent
         anchors.leftMargin: Theme.padding

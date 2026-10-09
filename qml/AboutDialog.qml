@@ -12,12 +12,28 @@ AppDialog {
         spacing: 14
 
         // Official RIFT Wordmark Logo
-        Image {
-            source: Theme.logo
-            Layout.preferredWidth: 120
-            Layout.preferredHeight: 32
-            fillMode: Image.PreserveAspectFit
-            smooth: true
+        Item {
+            Layout.preferredWidth: 140
+            Layout.preferredHeight: 36
+
+            Image {
+                id: logoImg
+                anchors.fill: parent
+                source: Theme.logo
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
+
+            Text {
+                visible: logoImg.status !== Image.Ready
+                anchors.verticalCenter: parent.verticalCenter
+                text: "RIFT"
+                color: "#FFFFFF"
+                font.family: Theme.fontUI
+                font.pixelSize: 26
+                font.weight: Font.Bold
+                font.letterSpacing: 2.0
+            }
         }
 
         Text {

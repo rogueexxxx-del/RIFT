@@ -113,18 +113,12 @@ QtObject {
         if (!base.endsWith("/")) base += "/"
         return base + subpath
     }
-    readonly property url logo: {
-        void assetsUrl
-        if (!assetsUrl || assetsUrl.toString() === "") return ""
-        return preset === "light" ? asset("logo/PNG/RIFT BLK@0.5x.png")
-                                  : asset("logo_wordmark.png")
-    }
-    readonly property url monogram: {
-        void assetsUrl
-        if (!assetsUrl || assetsUrl.toString() === "") return ""
-        return preset === "light" ? asset("logo/PNG/BLK MONOGRAM@0.5x.png")
-                                  : asset("logo/PNG/WHT MONOGRAM@0.5x.png")
-    }
+    readonly property url logo: (assetsUrl && assetsUrl.toString() !== "")
+        ? (preset === "light" ? asset("logo/SVG/RIFT BLK.svg") : asset("logo/SVG/RIFT WHT.svg"))
+        : ""
+    readonly property url monogram: (assetsUrl && assetsUrl.toString() !== "")
+        ? (preset === "light" ? asset("logo/SVG/BLK MONOGRAM.svg") : asset("logo/SVG/WHT MONOGRAM.svg"))
+        : ""
 
     // Sizes at the "Small" setting; applyScale multiplies.
     property int sizeBig:   18   // timecode, fps

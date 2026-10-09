@@ -16,7 +16,7 @@ Dialog {
 
     background: Rectangle {
         color: "#111111"
-        radius: 6
+        radius: Theme.radius
         border.width: 1
         border.color: "#2E2E2E"
     }
@@ -28,7 +28,15 @@ Dialog {
         Rectangle {
             anchors.fill: parent
             color: "#0D0D0D"
-            radius: 6
+            radius: Theme.radius
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: Theme.hairline
+            }
         }
 
         Text {
@@ -39,8 +47,7 @@ Dialog {
             color: "#FFFFFF"
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeTitle
-            font.weight: Font.Bold
-            font.letterSpacing: 0.5
+            font.weight: Font.SemiBold
         }
     }
 
@@ -61,15 +68,17 @@ Dialog {
                 color: btn.hovered ? "#FFFFFF" : "#CCCCCC"
                 font.family: Theme.fontUI
                 font.pixelSize: Theme.sizeSmall
-                font.weight: Font.Bold
+                font.weight: Font.SemiBold
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
             background: Rectangle {
                 color: btn.down ? "#000000" : (btn.hovered ? "#333333" : "#222222")
-                radius: 4
-                border.width: 0
+                radius: Theme.radius
+                border.width: 1
+                border.color: btn.hovered ? "#444444" : "#2A2A2A"
             }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
         }
     }
 }

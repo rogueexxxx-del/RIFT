@@ -103,17 +103,23 @@ Item {
             Rectangle {
                 id: linkBtn
                 anchors.verticalCenter: parent.verticalCenter
-                width: ctl.patched ? 46 : 36
+                width: ctl.patched ? 50 : 38
                 height: 18
                 radius: 3
-                color: ctl.patched ? ctl.tint : (linkHover.hovered ? "#383838" : "#222222")
+                color: ctl.patched ? ctl.tint : (linkHover.hovered ? "#333333" : "#1A1A1A")
                 border.width: 1
-                border.color: ctl.patched ? ctl.tint : "#444444"
+                border.color: ctl.patched ? ctl.tint : (linkHover.hovered ? "#555555" : "#303030")
+
+                readonly property color linkTextColor: {
+                    if (!ctl.patched) return linkHover.hovered ? "#FFFFFF" : "#888888"
+                    const lum = 0.299 * ctl.tint.r + 0.587 * ctl.tint.g + 0.114 * ctl.tint.b
+                    return lum > 0.45 ? "#000000" : "#FFFFFF"
+                }
 
                 Text {
                     anchors.centerIn: parent
                     text: ctl.patched ? "LINKED" : "LINK"
-                    color: ctl.patched ? "#000000" : (linkHover.hovered ? "#FFFFFF" : "#888888")
+                    color: linkBtn.linkTextColor
                     font.family: Theme.fontUI
                     font.pixelSize: 9
                     font.weight: Font.Bold
@@ -155,7 +161,7 @@ Item {
         }
     }
 
-    // ── Track Bar: #2B2B2B background, colored / white fill ──
+    // ── Track Bar: machined track with subtle highlight ──
     Rectangle {
         id: track
         anchors.left: parent.left
@@ -164,7 +170,9 @@ Item {
         anchors.bottomMargin: 4
         height: 12
         radius: 3
-        color: "#2B2B2B"
+        color: "#161616"
+        border.width: 1
+        border.color: hover.hovered ? "#383838" : "#262626"
 
         Rectangle {
             id: fill
@@ -173,7 +181,19 @@ Item {
             anchors.bottom: parent.bottom
             width: Math.max(0, parent.width * ctl.fraction())
             radius: 3
-            color: ctl.patched ? ctl.tint : "#FFFFFF"
+            color: ctl.patched ? ctl.tint : "#E0E0E0"
+
+            // Machined end-cap highlight
+            Rectangle {
+                visible: fill.width > 3
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 2
+                radius: 1
+                color: "#FFFFFF"
+                opacity: 0.85
+            }
         }
 
         // Hit / Drag area

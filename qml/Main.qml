@@ -325,49 +325,135 @@ ApplicationWindow {
                 smooth: true
             }
 
-            // Right side: Mode Switcher [ REACT.svg | LIVE.svg ]
-            Row {
+            // Bottom hairline seam
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: Theme.hairline
+            }
+
+            // Right side: Precision Segmented Mode Switcher [ REACT | LIVE ]
+            Rectangle {
                 anchors.right: parent.right
                 anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
+                height: 28
+                width: modeRow.implicitWidth + 4
+                radius: Theme.radius
+                color: "#121212"
+                border.width: 1
+                border.color: "#242424"
 
-                // REACT Button (Custom SVG icon from assets/figma icons)
-                Item {
-                    id: reactBtn
-                    width: 36
-                    height: 28
-                    opacity: viewport.mode === 0 ? 1.0 : (reactHover.hovered ? 0.6 : 0.35)
+                Row {
+                    id: modeRow
+                    anchors.centerIn: parent
+                    spacing: 2
 
-                    Image {
-                        anchors.fill: parent
-                        source: Theme.asset("figma icons/REACT.svg")
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
+                    // REACT segment
+                    Rectangle {
+                        id: reactSegment
+                        height: 22
+                        width: reactContent.implicitWidth + 16
+                        radius: 3
+                        color: viewport.mode === 0 ? "#262626" : (reactHover.hovered ? "#1C1C1C" : "transparent")
+                        border.width: viewport.mode === 0 ? 1 : 0
+                        border.color: "#3A3A3A"
+
+                        Row {
+                            id: reactContent
+                            anchors.centerIn: parent
+                            spacing: 5
+
+                            Canvas {
+                                id: reactIcon
+                                width: 12; height: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                onPaint: {
+                                    const ctx = getContext("2d")
+                                    ctx.reset()
+                                    ctx.fillStyle = viewport.mode === 0 ? "#EDEDED" : "#777777"
+                                    ctx.beginPath()
+                                    const cx = 6, cy = 6, rOuter = 5.5, rInner = 2.2
+                                    for (let i = 0; i < 16; ++i) {
+                                        const r = (i % 2 === 0) ? rOuter : rInner
+                                        const a = (i * Math.PI) / 8 - Math.PI / 2
+                                        const x = cx + r * Math.cos(a)
+                                        const y = cy + r * Math.sin(a)
+                                        if (i === 0) ctx.moveTo(x, y)
+                                        else ctx.lineTo(x, y)
+                                    }
+                                    ctx.closePath()
+                                    ctx.fill()
+                                }
+                                Connections {
+                                    target: viewport
+                                    function onModeChanged() { reactIcon.requestPaint() }
+                                }
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "REACT"
+                                color: viewport.mode === 0 ? "#FFFFFF" : (reactHover.hovered ? "#CCCCCC" : "#888888")
+                                font.family: Theme.fontUI
+                                font.pixelSize: 10
+                                font.weight: Font.SemiBold
+                                font.letterSpacing: 0.6
+                            }
+                        }
+
+                        HoverHandler { id: reactHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: viewport.mode = 0 }
+                        ToolTipArea { text: "React Mode: Timeline editing, audio modulation & export (1)" }
                     }
 
-                    HoverHandler { id: reactHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: viewport.mode = 0 }
-                    ToolTipArea { text: "React Mode: Edit timeline, patch audio, export" }
-                }
+                    // LIVE segment
+                    Rectangle {
+                        id: liveSegment
+                        height: 22
+                        width: liveContent.implicitWidth + 16
+                        radius: 3
+                        color: viewport.mode === 1 ? "#262626" : (liveHover.hovered ? "#1C1C1C" : "transparent")
+                        border.width: viewport.mode === 1 ? 1 : 0
+                        border.color: viewport.mode === 1 ? Theme.danger : "#3A3A3A"
 
-                // LIVE Button (Custom SVG icon from assets/figma icons)
-                Item {
-                    id: liveBtn
-                    width: 28
-                    height: 28
-                    opacity: viewport.mode === 1 ? 1.0 : (liveHover.hovered ? 0.6 : 0.35)
+                        Row {
+                            id: liveContent
+                            anchors.centerIn: parent
+                            spacing: 5
 
-                    Image {
-                        anchors.fill: parent
-                        source: Theme.asset("figma icons/LIVE.svg")
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
+                            // Live beacon indicator
+                            Rectangle {
+                                width: 6; height: 6; radius: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: viewport.mode === 1 ? Theme.danger : "#666666"
+
+                                Rectangle {
+                                    visible: viewport.mode === 1
+                                    anchors.centerIn: parent
+                                    width: 10; height: 10; radius: 5
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: Theme.danger
+                                    opacity: 0.5
+                                }
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "LIVE"
+                                color: viewport.mode === 1 ? "#FFFFFF" : (liveHover.hovered ? "#CCCCCC" : "#888888")
+                                font.family: Theme.fontUI
+                                font.pixelSize: 10
+                                font.weight: Font.SemiBold
+                                font.letterSpacing: 0.6
+                            }
+                        }
+
+                        HoverHandler { id: liveHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: viewport.mode = 1 }
+                        ToolTipArea { text: "Live Mode: Real-time performance with MIDI controller / OSC (2)" }
                     }
-
-                    HoverHandler { id: liveHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: viewport.mode = 1 }
-                    ToolTipArea { text: "Live Mode: Perform with MIDI controller / OSC" }
                 }
             }
         }

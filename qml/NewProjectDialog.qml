@@ -84,10 +84,10 @@ AppDialog {
                 font.pixelSize: Theme.size
                 leftPadding: 10
                 background: Rectangle {
-                    color: "#181818"
-                    radius: 0
+                    color: "#161616"
+                    radius: Theme.radius
                     border.width: 1
-                    border.color: nameField.activeFocus ? "#FFFFFF" : "#2E2E2E"
+                    border.color: nameField.activeFocus ? Theme.accent : "#2E2E2E"
                 }
                 onAccepted: dlg.start(false)
             }
@@ -184,8 +184,8 @@ AppDialog {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: Theme.control + 6
-                        color: "#181818"
-                        radius: 0
+                        color: "#161616"
+                        radius: Theme.radius
                         border.width: 1
                         border.color: "#2E2E2E"
                         Text {
