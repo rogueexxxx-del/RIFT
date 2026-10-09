@@ -103,13 +103,9 @@ QtObject {
 
     // ── type ──
     // Ships with the bundled face (Geist). Geist has tabular figures, so
-    // fontMono is only kept for hex fields and older callers.
-    property string fontUI:   "Geist, Segoe UI, sans-serif"
-    property string fontMono: "Geist Mono, Consolas, monospace"
-    // Wordmark is the logo image now (logoWhite/logoBlack); kept for callers.
-    readonly property string fontBrand: fontUI
-    readonly property string fontFamily:     fontUI
-    readonly property string fontFamilyMono: fontMono
+    // fontMono is only kept for hex fields and code/timecode callers.
+    property string fontUI:   "Geist"
+    property string fontMono: "Geist Mono"
     property url assetsUrl: ""
     function asset(subpath) {
         if (!assetsUrl || assetsUrl.toString() === "") return ""

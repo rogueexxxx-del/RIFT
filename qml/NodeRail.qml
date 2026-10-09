@@ -391,10 +391,10 @@ Rectangle {
                         anchors.centerIn: parent
                         text: Theme.nice(modelData).toLowerCase()
                         color: "#000000"
-                        font.family: "Arial"
+                        font.family: Theme.fontUI
                         font.pixelSize: 18
                         font.weight: Font.DemiBold
-                        font.letterSpacing: -1.0
+                        font.letterSpacing: -0.4
                     }
 
                     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }

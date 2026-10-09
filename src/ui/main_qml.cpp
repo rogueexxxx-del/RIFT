@@ -27,6 +27,11 @@
 
 int main(int argc, char** argv) {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D11);
+    QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
+
+    // Pass-through high DPI scaling preserves 1:1 pixel grid without nearest-neighbor blur
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("RIFT"));
@@ -47,6 +52,12 @@ int main(int argc, char** argv) {
         for (const QString& f : files)
             QFontDatabase::addApplicationFont(fontDir.filePath(f));
     }
+
+    // Set Geist with subpixel antialiasing and native DirectWrite hinting
+    QFont appFont(QStringLiteral("Geist"), 10);
+    appFont.setStyleHint(QFont::SansSerif, QFont::PreferAntialias);
+    appFont.setHintingPreference(QFont::PreferFullHinting);
+    app.setFont(appFont);
 
     // Basic, not the native Windows style: the shell is fully themed, the
     // native style fights it visually, and its PNG-based indicators need an

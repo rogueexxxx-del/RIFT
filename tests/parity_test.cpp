@@ -13,7 +13,6 @@
 //     on 99.5% of pixels).
 //
 // Build with RIFT_WITH_RHI to run check B (needs GPU). Check A runs headless.
-#include "rift/rift_engine.h"
 #include "rift/rift_types.h"
 #include "analysis_source.hpp"
 #include "smoother.hpp"

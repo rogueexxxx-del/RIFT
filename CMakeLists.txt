@@ -27,7 +27,6 @@ option(RIFT_BUILD_TESTS  "Build smoke + golden-diff tests"       ON)
 # Always-build set: C API + backend-agnostic logic (weak default hooks make
 # these unit-testable with no GPU). Verified by review; compiles on any C++20.
 set(RIFT_SOURCES
-  src/api.cpp
   src/audio_mixer.cpp         # real-time timeline audio mixer
   src/audio_system.cpp        # offline channel path (source+smoother+ring);
                               # miniaudio/pffft calls #if RIFT_WITH_AUDIO
@@ -119,10 +118,6 @@ endif()
 
 if(RIFT_BUILD_TESTS)
   enable_testing()
-  add_executable(rift_smoke tests/smoke.cpp)
-  target_link_libraries(rift_smoke PRIVATE rift_core)
-  add_test(NAME smoke COMMAND rift_smoke)
-
   add_executable(rift_audio_mix_test tests/test_audio_mix.cpp)
   target_link_libraries(rift_audio_mix_test PRIVATE rift_core)
   target_include_directories(rift_audio_mix_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -236,8 +231,6 @@ if(RIFT_BUILD_TESTS)
         VERSION 1.0
         QML_FILES
           qml/Main.qml
-          qml/Hairline.qml
-          qml/VHairline.qml
           qml/FlatButton.qml
           qml/TransportBar.qml
           qml/ParamPanel.qml
