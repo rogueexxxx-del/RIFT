@@ -538,11 +538,12 @@ RIFT_engine/
 ├─ packaging/           build_release.ps1, check_deps.ps1, rift.iss
 └─ tools/               bench.ps1 and other measuring scripts
 
-RIFT-release/           what actually ships: README, GUIDE, CHANGELOG,
-                        screenshots. Binaries go to GitHub Releases, not into
-                        the repo - the exe is over GitHub's 100 MB file limit.
-                        THE ONLY GIT REPO of the three. RIFT_engine, the actual
-                        source, is not under version control at all.
+RIFT_engine/           the full source code repository, CMake configuration,
+                        shaders, assets, QML interface, and packaging scripts.
+                        Tracked under Git with `main` (stable release) and
+                        `dev` (active development) branches. Binaries go to
+                        GitHub Releases, not into git history - the installer
+                        is ~75 MB and portable archive is ~117 MB.
 ```
 
 ### Driving it without the mouse
@@ -601,9 +602,9 @@ times the bytes". That is how the 0.1.4 export and looping fixes were proven.
 - Saving a preset under a name that already exists overwrites it without asking.
 - The Oscilloscope ignores its input and replaces the frame. To lay it over
   footage, use the node's blend and mix.
-- `src/api.cpp` is a 68-export C ABI with no consumer. It was the seam between
-  the Python front end and the C++ engine during the rewrite. Harmless, and a
-  candidate for deletion.
+- `src/api.cpp` and `include/rift/rift_engine.h` were dead 68-export C ABI
+  stubs leftover from the Python prototype rewrite; both were safely deleted
+  during the codebase simplification audit.
 
 ---
 
@@ -712,4 +713,72 @@ Left alone on purpose: ASCII's scanline (parity-pinned), the queue's fixed
 - **Packaging & Distribution**:
   - Bumped project version to `0.1.6` across CMake, Inno Setup script (`packaging/rift.iss`), and documentation.
   - Inno Setup compiler generation for `dist-installer/RIFT-0.1.6-setup.exe`.
+
+---
+
+## 16. The 0.1.7 and 0.1.8 Updates (October 2026)
+
+- **0.1.7 - Minimalist Meters, Contrast, and Preset Operations**:
+  - Minimalist level meters: removed cluttering dB numeric readouts and unneeded labels for clean visual monitoring.
+  - WCAG 2.1 AA color contrast: upgraded dimmed text tokens across the UI to guarantee minimum 4.5:1 / 7:1 contrast ratios on dark surfaces.
+  - Preset file operations: added context menu to presets (Rename, Duplicate, Copy JSON, Show in File Explorer).
+  - Subtle vintage modern film grain overlay across the application shell.
+- **0.1.8 - Master Compositing, Clip Selection, and Segmented Docks**:
+  - Master effect pipeline compositing: timeline composited output feeds directly into `RenderGraph::execute()`, ensuring effects like `kaleido`, `bloom`, and `thermal` reliably process all active footage and layers.
+  - Independent clip selection: selecting clips updates `selectedClip` for trimming, positioning, and inspector edits without clearing, parking, or altering the master effect chain.
+  - Segmented dock tabs: explicit tab switches (`Params` | `Clip` | `Color` | `Queue` on right dock, `Effect Chain` | `Presets` on left dock).
+  - Layer 0 compositing: base layer defaults to `Blend_Normal` to avoid turning black against empty background buffers.
+
+---
+
+## 17. The 1.0.0 Release (October 2026)
+
+First official release version: Independent per-clip effect architecture, NodeRail right-click workflows, interactive razor tool, freeze-on-pause playback, watermark export removal, top bar monogram branding, and refined dark UI.
+
+- **Independent Per-Clip Effects**:
+  - Splitting or chopping video clips gives each resulting segment its own independent GPU effect chain, isolated from the master composite graph.
+  - Selecting a clip opens its per-clip chain in NodeRail with a dedicated `CLIP X FX` header and a one-click `Master FX` return button.
+- **Node Rail Context Menu & Effect Replacement**:
+  - Right-clicking any effect node opens a context menu with `Change / Replace Effect...`, `Duplicate Effect`, `Reset Parameters`, and `Delete Effect`.
+  - Replaces an effect in-place without losing position or connections in the chain.
+- **Interactive Razor Tool**:
+  - Pressing `C` or clicking the Razor tool button activates an interactive red vertical cutting guide tracking the mouse cursor across timeline tracks with crosshair cursor.
+  - Precision click-to-cut splits clips at exact timestamps. Pressing `Esc` or clicking selection returns to normal mode.
+- **Playback Freeze on Pause**:
+  - Pausing video freezes shader uniforms, feedback buffers, oscilloscope buffers, and FFT analysis immediately (delta time zero, playhead held).
+- **Watermark Removal at Export**:
+  - Export dialog includes a one-click toggle to remove the RIFT watermark during rendering.
+- **Monogram Branding**:
+  - Top menu bar centered logo switched to the clean RIFT monogram glyph logo (`32px` height) instead of the full wordmark text.
+
+---
+
+## 18. Codebase Simplification & Ponytail Audit (October 2026)
+
+Swept and removed 877+ lines of dead C API stubs, obsolete offline tools, and redundant wrappers:
+- **Dead C ABI Removal**: Deleted `src/api.cpp` and `include/rift/rift_engine.h` (unused 68-export C ABI residue from the Python rewrite).
+- **QML Component Consolidation**: Deleted redundant single-line QML wrappers `qml/Hairline.qml` and `qml/VHairline.qml` in favor of direct Qt Quick `Rectangle` elements.
+- **Obsolete Tooling Pruned**: Deleted obsolete offline python scripts and outdated benchmark tools (`tools/analyze/`, `tools/gen_manifests.py`, `tools/golden_dump.py`, `tools/port_shaders.py`, `tools/tools_effects.py`).
+- **Tests Cleaned**: Removed deprecated `tests/smoke.cpp`.
+
+---
+
+## 19. Typography & High-End Visual Design Overhaul (October 2026)
+
+- **DirectWrite ClearType & Subpixel Text Rendering**:
+  - Enabled `QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering)` globally in `src/ui/main_qml.cpp`.
+  - Configured `QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough)` to avoid fractional coordinate scaling distortion.
+  - Registered `Geist` and `Geist Mono` fonts cleanly with native DirectWrite ClearType anti-aliasing and full hinting, completely eliminating font pixelation.
+- **Precision Segmented Mode Switcher**:
+  - Replaced raw Figma SVG buttons with a machined `[ REACT | LIVE ]` segmented toggle in the top menu bar featuring a starburst vector icon, a pulsing red live beacon dot (`#FF3B30`), micro-tactile push states (scale `0.97`), and keyboard shortcuts (`1` / `2`).
+- **Dynamic WCAG AA/AAA Contrast Formula**:
+  - Implemented dynamic luminance evaluation `(0.299 * r + 0.587 * g + 0.114 * b) > 0.45 ? "#000000" : "#FFFFFF"` across `ChainBlock.qml` and `NodeRail.qml`.
+  - All 35+ shaders (including deep hues like Cyanotype, Vortex, Feedback, and Vignette) automatically render high-contrast white text, while bright hues maintain legible black text.
+- **Machined Tactile Sliders & Hairline Seams**:
+  - `ParamSlider.qml` updated with a sleek `#E0E0E0` fill bar featuring a 2px machined end-cap highlight (`#FFFFFF`) and dynamic text coloring on `LINKED` audio modulators.
+  - Added subtle 1px hairline borders (`#1E1E1E` / `Theme.border`) beneath the top menu bar, along dock title headers, above the transport bar, and above channel meters.
+  - Upgraded dock splitters in `Dock.qml` into tactile hairline seams that illuminate with `Theme.accent` on hover and drag.
+- **Packaging & Releases**:
+  - Standalone Inno Setup Windows installer (`RIFT-1.0.0-setup.exe`, 75.5 MB) and portable standalone archive (`RIFT-1.0.0-portable.zip`, 117.4 MB) compiled, published to GitHub Release v1.0.0, and branches `main` & `dev` kept in sync.
+
 
