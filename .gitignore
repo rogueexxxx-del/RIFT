@@ -47,3 +47,16 @@ patch_qml_cpp.py
 update_asset_paths.py
 __pycache__/
 *.pyc
+
+# Local assistant instructions and session context
+/AGENTS.md
+/CLAUDE.md
+/CONTEXT.md
+/.claude/
+/.agents/
+/.codex/
+/.hermes/
+
+# Local UI verification captures
+/preview.png
+/screenshots/phase1/

@@ -15,17 +15,30 @@ Download the latest installer from the [Releases](https://github.com/rogueexxxx-
 - **Windows 10/11 x64 installer** (see the latest release)
 - Portable ZIP releases are also available in Releases.
 
+## Getting Started
+
+1. Install RIFT from Releases and create a project.
+2. Import a video or image, then add an audio track.
+3. Add effects, map their parameters to audio channels, and play the timeline.
+4. Export a video or switch to Live for performance.
+
+Read the [user guide](GUIDE.md) for media import, effects, audio mapping, MIDI, and export. See the [changelog](CHANGELOG.md) for release changes.
+
 ---
 
 ## Visual Showcase
+
+### See RIFT in Motion
+Video playback through ASCII, Halftone, and Glitch effects in the current desktop interface. This demo uses generated color-motion footage and a test audio track.
+![RIFT video playback and GPU effects demo](screenshots/demo.gif)
 
 ### Multi-Lane Timeline & Non-Destructive Editing
 Split clips, independent per-clip GPU shader chains, razor cutting, and audio sync.
 ![RIFT Timeline & Clip Editing](screenshots/timeline.png)
 
-### Real-Time Audio Visualizer Suite
-Oscilloscope with zero-crossing sync, 4096-bin log FFT spectrum, and Minimeters-grade audio taps.
-![RIFT Audio Visualizers](screenshots/scope.png)
+### Live Performance Workspace
+Switch from timeline editing to the Live workspace with controller mapping controls alongside the video preview and effect parameters.
+![RIFT Live Performance Workspace](screenshots/live.png)
 
 ### GPU Shader Chain & Procedural FX
 Over 30 modular shaders: Datamosh, Glitch, Ascii, Feedback Loops, Voronoi, Bloom, and Color Grading.
@@ -127,6 +140,10 @@ cmake --build build-release --config Release --target rift_shell -- /m:1
 This repository maintains two primary branches:
 - **`main`**: Official release code, stable tags, and production deployment scripts.
 - **`dev`**: Active feature development, shader prototypes, and work-in-progress patches.
+
+The former `master` branch is preserved as **`archive/v1.0.0`** for historical reference. New work uses short-lived feature or fix branches, merged into `dev` before release to `main`.
+
+Users should download packaged builds from Releases. Contributors can start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [documentation index](docs/README.md).
 
 ---
 

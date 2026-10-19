@@ -5,14 +5,14 @@ numerically identical to the prototype. Heavy stem separation stays offline
 (`tools/analyze/analyze.py`, already built).
 
 ## Design
-- **AnalysisSource** ([analysis_source.hpp](../src/analysis_source.hpp)) - reads
+- **AnalysisSource** ([analysis_source.hpp](../../../src/analysis_source.hpp)) - reads
   the `.analysis` blob, serves raw per-frame targets. TIME channel computed
   (frame/frame_count), matching the prototype.
-- **Smoother** ([smoother.hpp](../src/smoother.hpp)) - exact port of
+- **Smoother** ([smoother.hpp](../../../src/smoother.hpp)) - exact port of
   `AudioEngine.update()` reactive-params math (ATTACK 0.2 / RELEASE 0.85;
   triggers 4,8,9 use 0.05 / 0.82; TIME passthrough).
-- **AudioSystem** ([audio_system.hpp](../src/audio_system.hpp) /
-  [.cpp](../src/audio_system.cpp)) - miniaudio playback + per-render `tick()`
+- **AudioSystem** ([audio_system.hpp](../../../src/audio_system.hpp) /
+  [.cpp](../../../src/audio_system.cpp)) - miniaudio playback + per-render `tick()`
   that maps playhead → frame → targets → Smoother → **ChannelRing** (lock-free
   to render). Live path: pffft band split (skeleton, `<<PFFFT>>` markers).
 - **Engine wiring** - render loop calls `audio_->tick(playhead)` each frame,

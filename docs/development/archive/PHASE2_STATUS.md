@@ -6,12 +6,12 @@ render thread a bounded frame queue. Kills main-thread decode stalls
 (priority 3: low-latency video).
 
 ## Design (fixed here, backend-agnostic)
-- **FrameQueue** ([frame_queue.hpp](../src/frame_queue.hpp)) - bounded SPSC
+- **FrameQueue** ([frame_queue.hpp](../../../src/frame_queue.hpp)) - bounded SPSC
   handoff decode→render. Backpressure on push (decoder can't balloon RAM);
   `pop_for(playhead)` drops stale frames, never blocks render (returns last-good
   on underrun); `flush()` on seek/loop.
-- **MediaDecoder** ([media_decoder.hpp](../src/media_decoder.hpp) /
-  [.cpp](../src/media_decoder.cpp)) - worker thread demux+decode; HW path
+- **MediaDecoder** ([media_decoder.hpp](../../../src/media_decoder.hpp) /
+  [.cpp](../../../src/media_decoder.cpp)) - worker thread demux+decode; HW path
   (D3D11VA/NVDEC) keeps frames as GPU textures (zero-copy); SW fallback →
   sws_scale RGBA → uploaded via RhiContext. Images (incl. SVG) = 1-frame source.
 - **Engine wiring** - render loop pulls `frameForPlayhead(cf.playhead)` each
