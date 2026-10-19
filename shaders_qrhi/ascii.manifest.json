@@ -3,7 +3,7 @@
   "name": "ASCII",
   "version": 1,
   "frag": "ascii.frag",
-  "category": "generator",
+  "category": "texture",
   "uniforms": [
     {
       "name": "columns",
@@ -18,8 +18,8 @@
         "channel": "drums",
         "depth": 80.0,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -30,10 +30,11 @@
       "label": "CHARSET",
       "type": "float",
       "min": 0.0,
-      "max": 3.0,
+      "max": 4.0,
       "step": 1.0,
       "default": 0.0,
-      "discrete": true
+      "discrete": true,
+      "options": ["ASCII", "Blackletter", "Blocks", "Lines", "Crosses"]
     },
     {
       "name": "brightness",
@@ -68,8 +69,8 @@
         "channel": "bass",
         "depth": 0.5,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -81,6 +82,11 @@
       "name": "u_tex",
       "unit": 0,
       "source": "upstream"
+    },
+    {
+      "name": "u_ascii_atlas",
+      "unit": 3,
+      "source": "bundled blackletter font"
     }
   ]
 }

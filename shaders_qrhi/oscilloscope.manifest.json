@@ -1,126 +1,29 @@
 {
   "id": "oscilloscope",
   "name": "OSCILLOSCOPE",
-  "version": 1,
+  "version": 2,
   "frag": "oscilloscope.frag",
   "category": "generator",
   "uniforms": [
-    {
-      "name": "mode",
-      "label": "MODE",
-      "type": "float",
-      "min": 0.0,
-      "max": 4.0,
-      "step": 1.0,
-      "default": 0.0,
-      "discrete": true
-    },
-    {
-      "name": "gain",
-      "label": "GAIN",
-      "type": "float",
-      "min": 0.1,
-      "max": 4.0,
-      "step": 0.05,
-      "default": 1.0,
-      "discrete": false,
-      "binding": {
-        "channel": "bass",
-        "depth": 0.4,
-        "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
-        "in_lo": 0.0,
-        "in_hi": 1.0,
-        "invert": false
-      }
-    },
-    {
-      "name": "thickness",
-      "label": "LINE",
-      "type": "float",
-      "min": 0.0,
-      "max": 2.0,
-      "step": 0.05,
-      "default": 0.35,
-      "discrete": false
-    },
-    {
-      "name": "tilt",
-      "label": "SLOPE",
-      "type": "float",
-      "min": 0.0,
-      "max": 6.0,
-      "step": 0.5,
-      "default": 3.0,
-      "discrete": false
-    },
-    {
-      "name": "fill",
-      "label": "FILL",
-      "type": "float",
-      "min": 0.0,
-      "max": 1.0,
-      "step": 0.02,
-      "default": 0.9,
-      "discrete": false
-    },
-    {
-      "name": "grid_amt",
-      "label": "GRID",
-      "type": "float",
-      "min": 0.0,
-      "max": 1.0,
-      "step": 0.02,
-      "default": 0.8,
-      "discrete": false
-    },
-    {
-      "name": "palette",
-      "label": "PALETTE",
-      "type": "float",
-      "min": 0.0,
-      "max": 4.0,
-      "step": 1.0,
-      "default": 0.0,
-      "discrete": true
-    },
-    {
-      "name": "glow",
-      "label": "GLOW",
-      "type": "float",
-      "min": 0.0,
-      "max": 1.0,
-      "step": 1.0,
-      "default": 1.0,
-      "discrete": true
-    },
-    {
-      "name": "mapping",
-      "label": "MAP",
-      "type": "float",
-      "min": 0.0,
-      "max": 2.0,
-      "step": 1.0,
-      "default": 0.0,
-      "discrete": true
-    },
-    {
-      "name": "speed",
-      "label": "SPEED",
-      "type": "float",
-      "min": 15.0,
-      "max": 120.0,
-      "step": 5.0,
-      "default": 60.0,
-      "discrete": false
-    }
+    {"name":"mode","label":"MODE","type":"float","min":0,"max":2,"step":1,"default":0,"discrete":true,"options":["Waveform","XY","Radial"]},
+    {"name":"gain","label":"GAIN","type":"float","min":0.2,"max":3,"step":0.05,"default":1,"discrete":false,"binding":{"channel":"bass","depth":0.4,"curve":"lin","attack":0,"release":0,"in_lo":0,"in_hi":1,"invert":false}},
+    {"name":"thickness","label":"THICKNESS","type":"float","min":0.2,"max":3,"step":0.05,"default":1,"discrete":false,"binding":{"channel":"beat","depth":0.25,"curve":"lin","attack":0,"release":0,"in_lo":0,"in_hi":1,"invert":false}},
+    {"name":"glow","label":"GLOW","type":"float","min":0,"max":2,"step":0.05,"default":1,"discrete":false,"binding":{"channel":"highs","depth":0.3,"curve":"lin","attack":0,"release":0,"in_lo":0,"in_hi":1,"invert":false}},
+    {"name":"decay","label":"DECAY","type":"float","min":0,"max":0.995,"step":0.01,"default":0.82,"discrete":false,"binding":{"channel":"transient","depth":0.08,"curve":"lin","attack":0,"release":0,"in_lo":0,"in_hi":1,"invert":false}},
+    {"name":"rotation","label":"ROTATION","type":"float","min":-3.14,"max":3.14,"step":0.01,"default":0,"discrete":false},
+    {"name":"zoom","label":"ZOOM","type":"float","min":0.25,"max":2.5,"step":0.01,"default":1,"discrete":false},
+    {"name":"triggerLevel","label":"TRIGGER LEVEL","type":"float","min":0,"max":0.5,"step":0.01,"default":0.02,"discrete":false},
+    {"name":"holdoff","label":"HOLDOFF","type":"float","min":0,"max":0.5,"step":0.01,"default":0.05,"discrete":false},
+    {"name":"colorMode","label":"COLOR","type":"float","min":0,"max":1,"step":1,"default":0,"discrete":true,"options":["Amplitude","Beam"]},
+    {"name":"gridOn","label":"GRATICULE","type":"float","min":0,"max":1,"step":1,"default":0,"discrete":true},
+    {"name":"quality","label":"QUALITY","type":"float","min":0,"max":1,"step":1,"default":0,"discrete":true,"options":["Fast","High"]},
+    {"name":"bloomRadius","label":"BLOOM RADIUS","type":"float","min":0.5,"max":6,"step":0.1,"default":1.5,"discrete":false},
+    {"name":"background","label":"BACKGROUND","type":"float","min":0,"max":1,"step":1,"default":0,"discrete":true,"options":["Transparent","Black"]}
   ],
   "samplers": [
-    {
-      "name": "u_tex",
-      "unit": 0,
-      "source": "upstream"
-    }
+    {"name":"u_tex","unit":0,"source":"upstream"},
+    {"name":"u_audio_texture","unit":1,"source":"audio"},
+    {"name":"u_lut_tex","unit":3,"source":"lut"},
+    {"name":"u_feedback_tex","unit":4,"source":"feedback"}
   ]
 }

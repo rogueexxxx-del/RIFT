@@ -2,11 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Left Dock: Effect Chain & Presets View
-// - Tab switcher: "Effect Chain" / "Presets"
-// - Solid colored node blocks with centered black text and preview thumbnails
-// - White bracket connector lines
-// - Categorized preset groups with square thumbnails and "+" add preset
+// Effect chain and presets content. DockWorkspace owns the tab header.
+// Compact colored preview rows share the searchable effect browser.
 Rectangle {
     id: rail
     required property var viewport
@@ -15,26 +12,30 @@ Rectangle {
     property int currentTab: 0 // 0 = Effect Chain, 1 = Presets
     signal nodeSelected(int index)
 
-    readonly property int nodeH: 48
-    readonly property int gap: 16
+    readonly property int nodeH: Math.max(56, Theme.size + Theme.sizeSmall + 20)
+    readonly property int gap: 4
     readonly property int slotH: nodeH + gap
 
-    color: "#000000"
+    color: Theme.panel
 
     function openAdd() {
+        if (!rail.viewport) return
+        if (rail.viewport.editedClip < 0 && rail.viewport.clips.length > 0)
+            rail.viewport.selectClip(0)
         if (addPopup.opened) { addPopup.close(); return }
         addPopup.replaceIndex = -1
         addPopup.open()
     }
     function openSavePreset() {
+        if (!rail.viewport || rail.viewport.editedClip < 0) return
         nameField.text = ""
         saveDlg.open()
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 12
+        anchors.margins: 8
+        spacing: 8
 
         // ══════════════════════════════════════════════════════════════════
         // TAB 0: EFFECT CHAIN
@@ -45,15 +46,14 @@ Rectangle {
             visible: rail.currentTab === 0
             spacing: 8
 
-            // Banner shown when a clip is selected and being edited
+            // Show which effect chain is being edited.
             Rectangle {
-                visible: rail.viewport && rail.viewport.editedClip >= 0
+                visible: !!rail.viewport
                 Layout.fillWidth: true
-                height: 26
-                radius: 3
-                color: Theme.accentSoft
-                border.width: 1
-                border.color: Theme.accent
+                Layout.preferredHeight: 26
+                radius: 0
+                color: "transparent"
+                border.width: 0
 
                 RowLayout {
                     anchors.fill: parent
@@ -61,18 +61,23 @@ Rectangle {
                     spacing: 6
                     Text {
                         Layout.fillWidth: true
-                        text: "CLIP " + (rail.viewport.editedClip + 1) + " FX"
-                        color: Theme.accent
+                        text: rail.viewport.editedClip >= 0
+                              ? "CLIP " + (rail.viewport.editedClip + 1) + " FX" : "SELECT A CLIP"
+                        color: Theme.textDim
                         font.family: Theme.fontUI
                         font.pixelSize: Theme.sizeSmall
                         font.bold: true
                         elide: Text.ElideRight
                     }
                     FlatButton {
-                        label: "Master FX"
-                        tip: "Deselect clip and return to Master Effects"
+                        visible: rail.viewport.editedClip >= 0 && rail.viewport.chain.length > 0
+                        label: "Change"
+                        tip: "Change selected effect"
                         implicitHeight: 18
-                        onClicked: rail.viewport.selectClip(-1)
+                        onClicked: {
+                            addPopup.replaceIndex = Math.max(0, rail.viewport.selectedNode)
+                            addPopup.open()
+                        }
                     }
                 }
             }
@@ -87,7 +92,7 @@ Rectangle {
 
                 Column {
                     id: chainCol
-                    width: chainScroll.width
+                    width: chainScroll.availableWidth
                     spacing: 0
 
                     // Placeholder when no effects exist
@@ -100,12 +105,14 @@ Rectangle {
                             spacing: 8
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: (rail.viewport && rail.viewport.editedClip >= 0) ? "No effects on this clip" : "No master effects"
+                                text: (rail.viewport && rail.viewport.editedClip >= 0)
+                                      ? "No effects on this clip" : "Select a clip to edit effects"
                                 color: Theme.textMuted
                                 font.family: Theme.fontUI
                                 font.pixelSize: Theme.sizeSmall
                             }
                             FlatButton {
+                                visible: rail.viewport && rail.viewport.editedClip >= 0
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 label: "+ Add Effect"
                                 active: true
@@ -119,16 +126,17 @@ Rectangle {
                         id: chainRep
                         model: rail.viewport ? rail.viewport.chain : []
 
-                        delegate: Column {
+                        delegate: Item {
                             id: holder
+                            objectName: "chain-holder-" + index
                             required property int index
                             required property var modelData
                             width: chainCol.width
-                            spacing: 0
+                            height: block.height + rail.gap
 
                             property real dy: 0
                             property real dx: 0
-                            property int  shift: Math.round(dy / (50 + 24))
+                            property int shift: Math.round(dy / height)
                             property bool removing: Math.abs(dx) > 60
                             readonly property int  blendMode: holder.modelData.blend || 0
                             readonly property real mixAmt:
@@ -136,16 +144,21 @@ Rectangle {
 
                             ChainBlock {
                                 id: block
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: Math.min(260, Math.max(180, chainCol.width - 24))
-                                height: 50
+                                objectName: "chain-row-" + holder.index
+                                width: Math.max(0, holder.width - Theme.control)
+                                height: Math.max(rail.nodeH, implicitHeight)
                                 badge: (holder.blendMode !== 0 || holder.mixAmt < 0.999)
                                        ? rail.viewport.blendNames()[holder.blendMode]
                                          + " " + Math.round(holder.mixAmt * 100) + "%"
                                        : ""
                                 label: holder.modelData.label
-                                active: holder.modelData.selected || drag.active
+                                effectId: holder.modelData.effect
+                                active: rail.viewport.selectedNode === holder.index || drag.active
                                 opacity: holder.removing ? 0.45 : 1.0
+                                onActivated: {
+                                    rail.viewport.selectedNode = holder.index
+                                    rail.nodeSelected(holder.index)
+                                }
 
                                 TapHandler {
                                     onTapped: {
@@ -184,13 +197,22 @@ Rectangle {
                                 }
                             }
 
-                            // Connector wire between blocks (only between adjacent nodes)
-                            Rectangle {
-                                visible: holder.index < (chainRep.count - 1)
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: 1
-                                height: 24
-                                color: "#FFFFFF"
+                            FlatButton {
+                                id: chainMenuButton
+                                objectName: "chain-menu-" + holder.index
+                                anchors.right: parent.right
+                                anchors.verticalCenter: block.verticalCenter
+                                width: Theme.control
+                                height: Theme.control
+                                plain: true
+                                label: "..."
+                                tip: "Effect actions"
+                                onClicked: {
+                                    rail.viewport.selectedNode = holder.index
+                                    rail.nodeSelected(holder.index)
+                                    nodeMenu.targetIndex = holder.index
+                                    nodeMenu.popup(chainMenuButton, 0, chainMenuButton.height)
+                                }
                             }
                         }
                     }
@@ -278,40 +300,48 @@ Rectangle {
     }
 
     // ── Add Effect Popup ──
-    Popup {
+    Rectangle {
         id: addPopup
-        parent: Overlay.overlay
-        modal: false
-        focus: true
-        padding: 8
-        width: 260
-        x: {
-            if (!Overlay.overlay) return 260
-            const g = rail.mapToItem(Overlay.overlay, rail.width + 6, 0)
-            return Math.max(8, Math.min(g.x, Overlay.overlay.width - width - 12))
-        }
-        y: {
-            if (!Overlay.overlay) return 52
-            const g = rail.mapToItem(Overlay.overlay, 0, 48)
-            const minY = 52  // Keep safely below the top menu bar
-            const maxY = Math.max(minY, Overlay.overlay.height - height - 16)
-            return Math.max(minY, Math.min(g.y, maxY))
-        }
+        anchors.fill: parent
+        z: 20
+        visible: opened
+        color: Theme.panel
+        property bool opened: false
+        property int replaceIndex: -1
+        function open() { opened = true; filter.text = ""; filter.forceActiveFocus() }
+        function close() { opened = false }
 
-        background: Rectangle {
-            color: Theme.panel
-            border.width: 1
-            border.color: Theme.border
-            radius: 4
-        }
-
-        onOpened: { filter.text = ""; filter.forceActiveFocus() }
-
-        contentItem: ColumnLayout {
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
             spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    Layout.fillWidth: true
+                    text: addPopup.replaceIndex >= 0 ? "CHANGE EFFECT" : "ADD EFFECT"
+                    color: Theme.text
+                    font.family: Theme.fontUI
+                    font.pixelSize: Theme.sizeSmall
+                }
+                FlatButton { plain: true; small: true; label: "Close"; onClicked: addPopup.close() }
+            }
+
+            Text {
+                visible: !rail.viewport || rail.viewport.editedClip < 0
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Add or select a clip before applying an effect."
+                color: Theme.textMuted
+                font.family: Theme.fontUI
+                font.pixelSize: Theme.sizeSmall
+            }
 
             TextField {
                 id: filter
+                objectName: "effect-search"
+                Accessible.name: "Search effects"
                 Layout.fillWidth: true
                 placeholderText: "Search effects..."
                 color: Theme.text
@@ -319,21 +349,29 @@ Rectangle {
                 font.pixelSize: Theme.size
                 background: Rectangle {
                     color: Theme.bg
-                    implicitHeight: 28
+                    implicitHeight: Theme.control
                     border.width: 1
-                    border.color: filter.activeFocus ? Theme.accent : Theme.border
-                    radius: 3
+                    border.color: filter.activeFocus ? Theme.focusRing : Theme.inputBorder
+                    radius: Theme.radius
                 }
-                onAccepted: if (hits.count > 0) addPopup.pick(hits.itemAtIndex(0).id)
+                onAccepted: if (hits.count > 0) addPopup.pick(hits.model[Math.max(0, hits.currentIndex)])
+                Keys.onDownPressed: hits.incrementCurrentIndex()
+                Keys.onUpPressed: hits.decrementCurrentIndex()
                 Keys.onEscapePressed: addPopup.close()
             }
 
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
             ListView {
                 id: hits
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, 380)
+                objectName: "effect-results"
+                width: parent.width
+                height: Math.max(0, Math.floor((parent.height + spacing) / (64 + spacing)) * (64 + spacing) - spacing)
                 clip: true
-                spacing: 6
+                spacing: 4
+                snapMode: ListView.SnapToItem
+                currentIndex: count > 0 ? 0 : -1
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
@@ -343,77 +381,26 @@ Rectangle {
                         || Theme.nice(e).toLowerCase().indexOf(filter.text.toLowerCase()) !== -1
                 })
 
-                // Delegate styled matching Effect Chain blocks (solid color, preview image, centered text)
-                delegate: Rectangle {
+                delegate: ChainBlock {
                     id: effectCard
                     required property string modelData
-                    readonly property string id: modelData
-                    width: hits.width - 6
-                    height: 42
-                    radius: 3
-                    color: Theme.effectColor(modelData)
-                    border.width: hover.hovered ? 2 : 1
-                    border.color: hover.hovered ? "#FFFFFF" : Qt.rgba(0, 0, 0, 0.4)
-                    clip: true
-
-                    // Preview thumbnail overlay
-                    Image {
-                        anchors.fill: parent
-                        source: Theme.asset("effect_previews/" + modelData + ".png")
-                        fillMode: Image.PreserveAspectCrop
-                        opacity: 0.28
-                    }
-
-                    readonly property color cardTextColor: {
-                        const c = Theme.effectColor(modelData)
-                        const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
-                        return lum > 0.45 ? "#000000" : "#FFFFFF"
-                    }
-
-                    // Top bracket cap
-                    Rectangle {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: parent.top
-                        anchors.topMargin: -2
-                        width: 13
-                        height: 4
-                        color: "#FFFFFF"
-                        border.width: 1
-                        border.color: "#000000"
-                    }
-
-                    // Bottom bracket cap
-                    Rectangle {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: -2
-                        width: 13
-                        height: 4
-                        color: "#FFFFFF"
-                        border.width: 1
-                        border.color: "#000000"
-                    }
-
-                    // Centered title matching Effect Chain with dynamic contrast
-                    Text {
-                        anchors.centerIn: parent
-                        text: Theme.nice(modelData).toLowerCase()
-                        color: parent.cardTextColor
-                        font.family: Theme.fontUI
-                        font.pixelSize: 18
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: -0.4
-                    }
+                    effectId: modelData
+                    width: hits.width
+                    height: implicitHeight
+                    connectors: false
+                    label: Theme.nice(modelData)
+                    active: hover.hovered || ListView.isCurrentItem
+                    onActivated: addPopup.pick(effectCard.effectId)
 
                     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: addPopup.pick(modelData) }
+                    TapHandler { onTapped: addPopup.pick(effectCard.effectId) }
                 }
+            }
             }
         }
 
-        property int replaceIndex: -1
-
         function pick(id) {
+            if (!rail.viewport || rail.viewport.editedClip < 0) return
             if (replaceIndex >= 0) {
                 rail.viewport.selectedNode = replaceIndex
                 rail.viewport.effect = id

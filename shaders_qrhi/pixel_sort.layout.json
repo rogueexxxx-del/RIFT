@@ -5,7 +5,8 @@
     "max_length",
     "speed",
     "color_bleed",
-    "sort_dir"
+    "sort_dir",
+    "quality"
   ],
   "samplers": [
     [

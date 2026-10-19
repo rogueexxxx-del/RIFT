@@ -26,6 +26,7 @@ struct AudioMixer::Decoded {
     std::string        path;
     std::vector<float> pcm;     // interleaved stereo, kMixRate
     int64_t            frames = 0;   // per-channel frame count
+    SourceWaveform     waveform;
 };
 
 // A placement of a Decoded on the timeline. Immutable except for `gain`.
@@ -87,6 +88,13 @@ void AudioMixer::setGain(int index, float gain) {
                                 std::memory_order_relaxed);
 }
 
+std::shared_ptr<const AudioMixer::SourceWaveform> AudioMixer::clipWaveform(int index) const {
+    auto s = set_.load(std::memory_order_acquire);
+    if (!s || index < 0 || index >= int(s->clips.size())) return {};
+    const auto& dec = s->clips[index]->dec;
+    return {dec, &dec->waveform};
+}
+
 void AudioMixer::setClips(const std::vector<AudioClipSpec>& clips) {
     auto old = set_.load();
     auto ns  = std::make_shared<Set>();
@@ -104,11 +112,27 @@ void AudioMixer::setClips(const std::vector<AudioClipSpec>& clips) {
             }
         }
         if (!dec) {
+            // Placements first seen in this update share the same decode too.
+            for (const auto& np : ns->clips) {
+                if (np->dec->path == spec.path) { dec = np->dec; break; }
+            }
+        }
+        if (!dec) {
             auto d = std::make_shared<Decoded>();
             d->path = spec.path;
             if (!decode(spec.path, d->pcm)) continue;   // unreadable: skip
             d->frames = int64_t(d->pcm.size()) / kMixChannels;
             if (d->frames <= 0) continue;
+            const size_t buckets = size_t(std::min<int64_t>(8192, d->frames));
+            d->waveform.path = spec.path;
+            d->waveform.duration = double(d->frames) / double(kMixRate);
+            d->waveform.peaks.assign(buckets, 0.f);
+            for (int64_t frame = 0; frame < d->frames; ++frame) {
+                const size_t bucket = size_t(frame * int64_t(buckets) / d->frames);
+                const size_t si = size_t(frame) * kMixChannels;
+                d->waveform.peaks[bucket] = std::max(d->waveform.peaks[bucket],
+                    std::max(std::fabs(d->pcm[si]), std::fabs(d->pcm[si + 1])));
+            }
             dec = d;
         }
 

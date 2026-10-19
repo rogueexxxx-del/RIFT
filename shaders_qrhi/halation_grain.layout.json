@@ -1,0 +1,5 @@
+{
+  "id": "halation_grain",
+  "params": ["threshold", "radiusPx", "halation", "grain", "quality"],
+  "samplers": [["u_tex", 2]]
+}

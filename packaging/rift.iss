@@ -12,7 +12,7 @@
 ; Override the staged dir with:  iscc /DStageDir=..\dist packaging\rift.iss
 
 #define AppName     "RIFT"
-#define AppVersion  "1.0.0"
+#define AppVersion  "1.0.5"
 #define AppPublisher "Revanth Rangisetti"
 #define AppExe      "rift_shell.exe"
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(rift_engine LANGUAGES CXX VERSION 1.0.0)
+project(rift_engine LANGUAGES CXX VERSION 1.0.5)
 
 # ── Toolchain ──────────────────────────────────────────────────
 # Configure with vcpkg:
@@ -247,7 +247,11 @@ if(RIFT_BUILD_TESTS)
           qml/ColorStyleEditor.qml
           qml/AppMenu.qml
           qml/IconButton.qml
+          qml/AssetIcon.qml
           qml/Dock.qml
+          qml/DockGroup.qml
+          qml/DockWorkspace.qml
+          qml/DockLayout.js
           qml/ControllerView.qml
           qml/ExportDialog.qml
           qml/ExportProgressDialog.qml
@@ -259,6 +263,8 @@ if(RIFT_BUILD_TESTS)
           qml/QueuePanel.qml
           qml/ToolTipArea.qml
           qml/StyledMenu.qml
+          qml/StyledMenuItem.qml
+          qml/StyledMenuSeparator.qml
           qml/AppDialog.qml
           qml/NewProjectDialog.qml
           qml/FontPicker.qml
@@ -327,7 +333,8 @@ if(RIFT_BUILD_TESTS)
       # know about. Without it the installed exe dies at startup with no
       # message (WIN32 subsystem: nowhere to print).
       install(TARGETS rift_shell RUNTIME DESTINATION .)
-      install(DIRECTORY "${QSB_OUT}/" DESTINATION shaders)
+      install(FILES ${_all_qsb} DESTINATION shaders)
+      install(FILES ${PORTED_LAYOUTS} ${PORTED_MANIFESTS} DESTINATION shaders)
       install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/" DESTINATION fonts)
       install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/" DESTINATION assets)
       install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md" DESTINATION .)

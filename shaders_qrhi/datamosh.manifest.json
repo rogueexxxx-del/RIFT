@@ -3,7 +3,7 @@
   "name": "DATAMOSH",
   "version": 1,
   "frag": "datamosh.frag",
-  "category": "generator",
+  "category": "glitch",
   "uniforms": [
     {
       "name": "block",
@@ -28,8 +28,8 @@
         "channel": "transient",
         "depth": 0.7,
         "curve": "lin",
-        "attack": 0,
-        "release": 0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0,
         "in_hi": 1,
         "invert": false
@@ -58,8 +58,8 @@
         "channel": "kick",
         "depth": 0.8,
         "curve": "lin",
-        "attack": 0,
-        "release": 0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0,
         "in_hi": 1,
         "invert": false
@@ -92,14 +92,14 @@
       "min": 0,
       "max": 0.98,
       "step": 0.01,
-      "default": 0.85,
+      "default": 0.55,
       "discrete": false,
       "binding": {
         "channel": "kick",
         "depth": 0.1,
         "curve": "lin",
-        "attack": 0,
-        "release": 0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0,
         "in_hi": 1,
         "invert": false

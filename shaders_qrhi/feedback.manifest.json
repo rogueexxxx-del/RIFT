@@ -3,7 +3,7 @@
   "name": "FEEDBACK",
   "version": 1,
   "frag": "feedback.frag",
-  "category": "generator",
+  "category": "light",
   "uniforms": [
     {
       "name": "decay",
@@ -12,8 +12,18 @@
       "min": 0,
       "max": 1,
       "step": 0.01,
-      "default": 0.92,
-      "discrete": false
+      "default": 0.94,
+      "discrete": false,
+      "binding": {
+        "in_lo": 0.0,
+        "depth": 0.06,
+        "attack": 0.08,
+        "invert": false,
+        "release": 0.3,
+        "in_hi": 1.0,
+        "curve": "lin",
+        "channel": "bass"
+      }
     },
     {
       "name": "zoom",
@@ -22,8 +32,18 @@
       "min": 0.9,
       "max": 1.1,
       "step": 0.001,
-      "default": 1.01,
-      "discrete": false
+      "default": 1.003,
+      "discrete": false,
+      "binding": {
+        "in_lo": 0.0,
+        "depth": 0.025,
+        "attack": 0.01,
+        "invert": false,
+        "release": 0.22,
+        "in_hi": 1.0,
+        "curve": "lin",
+        "channel": "drums"
+      }
     },
     {
       "name": "rotate",
@@ -32,8 +52,18 @@
       "min": -1,
       "max": 1,
       "step": 0.01,
-      "default": 0.05,
-      "discrete": false
+      "default": 0.0,
+      "discrete": false,
+      "binding": {
+        "in_lo": 0.0,
+        "depth": 0.08,
+        "attack": 0.01,
+        "invert": false,
+        "release": 0.25,
+        "in_hi": 1.0,
+        "curve": "lin",
+        "channel": "transient"
+      }
     },
     {
       "name": "warp",
@@ -48,8 +78,8 @@
         "channel": "melody",
         "depth": 0.4,
         "curve": "lin",
-        "attack": 0,
-        "release": 0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0,
         "in_hi": 1,
         "invert": false
@@ -78,8 +108,8 @@
         "channel": "bass",
         "depth": 0.3,
         "curve": "lin",
-        "attack": 0,
-        "release": 0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0,
         "in_hi": 1,
         "invert": false

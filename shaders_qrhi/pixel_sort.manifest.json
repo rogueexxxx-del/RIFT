@@ -3,7 +3,7 @@
   "name": "PIXEL SORT",
   "version": 1,
   "frag": "pixel_sort.frag",
-  "category": "generator",
+  "category": "glitch",
   "uniforms": [
     {
       "name": "threshold",
@@ -18,8 +18,8 @@
         "channel": "melody",
         "depth": -0.2,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -38,8 +38,8 @@
         "channel": "bass",
         "depth": 0.15,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -58,8 +58,8 @@
         "channel": "bpm",
         "depth": 0.5,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -84,6 +84,16 @@
       "step": 1.0,
       "default": 0.0,
       "discrete": true
+    },
+    {
+      "min": 0.0,
+      "step": 1.0,
+      "name": "quality",
+      "label": "QUALITY",
+      "discrete": true,
+      "default": 0.0,
+      "type": "float",
+      "max": 1.0
     }
   ],
   "samplers": [

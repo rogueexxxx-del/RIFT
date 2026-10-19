@@ -7,6 +7,7 @@
 #include "rhi_context.hpp"
 #include <filesystem>
 #include <cstdio>
+#include <chrono>
 
 #if RIFT_WITH_FFMPEG
 extern "C" {
@@ -106,8 +107,8 @@ static bool ff_open(MediaDecoder::Ff& F, const std::string& path,
 static DecodedFrame ff_to_rgba(MediaDecoder::Ff& F, int w, int h) {
     DecodedFrame df;
     df.w = w; df.h = h; df.is_gpu = false;
-    df.rgba.resize(size_t(w) * h * 4);
-    uint8_t* dst[4] = { df.rgba.data(), nullptr, nullptr, nullptr };
+    df.rgba = std::make_shared<std::vector<uint8_t>>(size_t(w) * h * 4);
+    uint8_t* dst[4] = { df.rgba->data(), nullptr, nullptr, nullptr };
     int dstStride[4] = { w * 4, 0, 0, 0 };
     sws_scale(F.sws, F.frame->data, F.frame->linesize, 0, h, dst, dstStride);
     int64_t pts = F.frame->best_effort_timestamp;
@@ -199,21 +200,38 @@ void MediaDecoder::worker_(std::string path) {
 
 uint32_t MediaDecoder::frameForPlayhead(double playhead) {
     DecodedFrame f;
+    const bool profile = blocking_.load() && std::getenv("RIFT_EXPORT_PROFILE");
+    const auto fetch_start = profile ? std::chrono::steady_clock::now()
+                                     : std::chrono::steady_clock::time_point{};
     // 2 s is generous for one frame; past that the decoder is wedged or the
     // source has ended, and the export should finish rather than hang.
     const bool got = blocking_.load()
                    ? queue_.pop_for_blocking(playhead, f, 2000)
                    : queue_.pop_for(playhead, f);
     if (!got) return static_tex_;              // underrun -> last good (0 first)
+    const auto upload_start = profile ? std::chrono::steady_clock::now()
+                                      : std::chrono::steady_clock::time_point{};
 
-    if (f.frame_index == last_up_ && static_tex_) return static_tex_;  // unchanged
-
-    if (f.is_gpu) {
-        static_tex_ = f.gpu_tex;               // HW path (future zero-copy)
-    } else if (!f.rgba.empty() && rhi_) {
-        static_tex_ = rhi_->uploadMedia(static_tex_, f.rgba.data(), f.w, f.h);
+    if (f.frame_index != last_up_ || !static_tex_) {
+        if (f.is_gpu) {
+            static_tex_ = f.gpu_tex;           // HW path (future zero-copy)
+        } else if (f.rgba && !f.rgba->empty() && rhi_) {
+            static_tex_ = rhi_->uploadMedia(static_tex_, f.rgba->data(), f.w, f.h);
+        }
+        last_up_ = f.frame_index;
     }
-    last_up_ = f.frame_index;
+    if (profile) {
+        static thread_local double fetch_ms = 0.0, upload_ms = 0.0;
+        static thread_local int frames = 0;
+        fetch_ms += std::chrono::duration<double, std::milli>(upload_start - fetch_start).count();
+        upload_ms += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - upload_start).count();
+        if (++frames == 60) {
+            std::fprintf(stderr, "[media profile] 60 frames: queue %.2f ms, upload %.2f ms per frame\n",
+                         fetch_ms / frames, upload_ms / frames);
+            frames = 0; fetch_ms = upload_ms = 0.0;
+        }
+    }
     return static_tex_;
 }
 

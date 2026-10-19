@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // Right-hand parameter rack for the selected effect. Ranges, labels and
 // defaults come from the shader manifest, which was generated from the
@@ -30,32 +31,55 @@ Rectangle {
         return 0
     }
 
-    color: "#000000"
+    color: Theme.panel
+    radius: Theme.panelRadius
+
+    function blendLabel(name) {
+        const labels = { "NRM": "Normal", "NORM": "Normal", "ADD": "Add", "SCR": "Screen", "MUL": "Multiply", "OVR": "Overlay", "DIFF": "Difference", "SUB": "Subtract", "LGT": "Lighten", "DRK": "Darken" }
+        return labels[String(name).toUpperCase()] || Theme.nice(name)
+    }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 12
+        anchors.margins: 8
+        spacing: 6
 
         ListView {
+            id: parameters
+            objectName: "effectParameters"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: 10
+            spacing: 6
             model: panel.viewport.params
+            ScrollBar.vertical: ScrollBar {}
+            boundsBehavior: Flickable.StopAtBounds
+
+            footer: Text {
+                width: parameters.width
+                visible: parameters.count === 0
+                padding: Theme.padding
+                wrapMode: Text.WordWrap
+                text: panel.viewport.selectedNode < 0
+                    ? "Select an effect to edit its parameters. Add an effect from the effects browser to start."
+                    : "This effect has no adjustable parameters."
+                color: Theme.textMuted
+                font.family: Theme.fontUI
+                font.pixelSize: Theme.size
+            }
 
             header: Column {
                 width: ListView.view ? ListView.view.width : 0
-                spacing: 10
-                bottomPadding: 8
+                spacing: 6
+                bottomPadding: 4
 
                 // Effect Node Blending Header (moved from NodeRail)
                 Rectangle {
                     id: nodeBlendBox
                     width: parent.width
-                    height: 38
-                    radius: 4
-                    color: "#161616"
+                    height: blendControls.implicitHeight + 16
+                    radius: Theme.panelRadius
+                    color: "transparent"
                     visible: panel.viewport && panel.viewport.selectedNode >= 0
                              && panel.viewport.selectedNode < panel.viewport.chain.length
 
@@ -63,81 +87,49 @@ Rectangle {
                     readonly property int bMode: nodeData ? (nodeData.blend || 0) : 0
                     readonly property real bMix: nodeData ? (nodeData.mix === undefined ? 1.0 : nodeData.mix) : 1.0
 
-                    RowLayout {
+                    ColumnLayout {
+                        id: blendControls
                         anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        spacing: 8
-
-                        Text {
-                            text: "BLEND"
-                            color: Theme.textDim
-                            font.family: Theme.fontUI
-                            font.pixelSize: Theme.sizeTiny
-                            font.weight: Font.Bold
-                        }
-
-                        FlatButton {
-                            small: true
-                            implicitWidth: 54
-                            label: panel.viewport.blendNames()[nodeBlendBox.bMode]
-                            onClicked: panel.viewport.cycleNodeBlend(panel.viewport.selectedNode)
-                        }
-
-                        Text {
-                            text: "MIX"
-                            color: Theme.textDim
-                            font.family: Theme.fontUI
-                            font.pixelSize: Theme.sizeTiny
-                            font.weight: Font.Bold
-                        }
-
-                        // Interactive mix slider
-                        Rectangle {
+                        anchors.margins: 8
+                        spacing: Theme.gapTight
+                        RowLayout {
                             Layout.fillWidth: true
-                            height: 10
-                            radius: 2
-                            color: "#2B2B2B"
-
-                            Rectangle {
-                                anchors.left: parent.left
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
-                                width: Math.max(0, parent.width * nodeBlendBox.bMix)
-                                radius: 2
-                                color: "#FFFFFF"
+                            ComboBox {
+                                id: effectBlend
+                                objectName: "effectBlendSelector"
+                                Layout.fillWidth: true
+                                implicitHeight: Theme.control
+                                font.family: Theme.fontUI
+                                font.pixelSize: Theme.sizeSmall
+                                palette.text: Theme.text
+                                palette.buttonText: Theme.text
+                                palette.base: Theme.raised
+                                palette.window: Theme.flyout
+                                palette.highlight: Theme.accent
+                                palette.highlightedText: Theme.foregroundFor(Theme.accent)
+                                background: Rectangle {
+                                    color: Theme.raised
+                                    radius: Theme.radius
+                                    border.width: effectBlend.activeFocus ? Theme.focusWidth : 1
+                                    border.color: effectBlend.activeFocus ? Theme.focusRing : Theme.border
+                                }
+                                model: panel.viewport.blendNames().map(panel.blendLabel)
+                                currentIndex: nodeBlendBox.bMode
+                                Accessible.name: "Effect blend mode"
+                                onActivated: panel.viewport.setNodeBlend(panel.viewport.selectedNode, currentIndex, nodeBlendBox.bMix)
                             }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onPositionChanged: (mouse) => {
-                                    if (pressed) {
-                                        const f = Math.max(0, Math.min(1, mouse.x / width))
-                                        panel.viewport.setNodeBlend(panel.viewport.selectedNode, nodeBlendBox.bMode, f)
-                                    }
-                                }
-                                onPressed: (mouse) => {
-                                    const f = Math.max(0, Math.min(1, mouse.x / width))
-                                    panel.viewport.setNodeBlend(panel.viewport.selectedNode, nodeBlendBox.bMode, f)
-                                }
+                            FlatButton {
+                                label: "Remove"
+                                tip: "Remove this effect"
+                                onClicked: panel.viewport.removeNode(panel.viewport.selectedNode)
                             }
                         }
-
-                        Text {
-                            text: Math.round(nodeBlendBox.bMix * 100) + "%"
-                            color: Theme.text
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.sizeTiny
-                            Layout.preferredWidth: 32
-                        }
-
-                        FlatButton {
-                            small: true
-                            implicitWidth: 24
-                            label: "×"
-                            onClicked: panel.viewport.removeNode(panel.viewport.selectedNode)
-                            ToolTipArea { text: "Delete this effect" }
+                        ParamSlider {
+                            Layout.fillWidth: true
+                            label: "Effect mix"
+                            from: 0; to: 1; stepSize: 0.01
+                            value: nodeBlendBox.bMix
+                            onMoved: (v) => panel.viewport.setNodeBlend(panel.viewport.selectedNode, nodeBlendBox.bMode, v)
                         }
                     }
                 }
@@ -197,7 +189,8 @@ Rectangle {
                 // Keyframes: record the value at the playhead, step through
                 // interpolation, clear. Shown per parameter so animating one
                 // thing does not mean hunting for it in a separate panel.
-                Row {
+                Flow {
+                    width: parent.width
                     visible: row.open
                     // Air between the buttons: at 4 they touched and read as
                     // one segmented control rather than separate actions.
@@ -210,7 +203,6 @@ Rectangle {
                         ? panel.viewport.keyInterpNow[index] : -1
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         // Same column width as the patch row below.
                         width: Theme.labelCol
                         text: "Key"
@@ -223,29 +215,28 @@ Rectangle {
                     // every frame rebuilt every delegate.
                     FlatButton {
                         small: true
+                        plain: true
                         // Filled when a key sits at the playhead: pressing then
                         // re-records it rather than adding a second one.
-                        label: parent.here ? "Set" : "+"
+                        label: parent.here ? "Set key" : "Add key"
                         active: parent.here
-                        implicitWidth: 34
                         onClicked: panel.viewport.addKey(index)
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: parent.here
                         label: ["Linear", "Ease", "Step"][Math.max(0, parent.interp)]
-                        implicitWidth: 44
                         onClicked: panel.viewport.cycleKeyInterp(index)
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: parent.here
                         label: "Delete"
-                        implicitWidth: 34
                         onClicked: panel.viewport.removeKeyAt(index)
                     }
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         visible: (modelData.keyCount || 0) > 0
                         text: (modelData.keyCount || 0) + " keys"
                         color: Theme.accent
@@ -254,18 +245,18 @@ Rectangle {
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: (modelData.keyCount || 0) > 0
                         label: "Clear"
-                        implicitWidth: 34
                         onClicked: panel.viewport.clearKeys(index)
                     }
                     // Key this parameter on every detected beat at once - the
                     // reason markers exist. Hidden when nothing is detected.
                     FlatButton {
                         small: true
+                        plain: true
                         visible: panel.viewport.markers.length > 0
                         label: "Beats"
-                        implicitWidth: 44
                         onClicked: panel.viewport.keyOnMarkers(index)
                     }
 
@@ -278,7 +269,7 @@ Rectangle {
                     FlatButton {
                         small: true
                         label: panel.viewport.learning === index
-                               ? "..." : (parent.ctl !== "" ? parent.ctl : "Map")
+                               ? "Learning MIDI / OSC" : (parent.ctl !== "" ? parent.ctl : "Map")
                         active: panel.viewport.learning === index || parent.ctl !== ""
                         implicitWidth: Math.max(40, label.length * 7 + 10)
                         onClicked: {

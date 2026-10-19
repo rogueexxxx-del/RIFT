@@ -109,15 +109,6 @@ def gen_voronoi():
             draw.line([p1, p2], fill=(0, 0, 0, 160), width=2)
     return im
 
-def gen_terminal():
-    im = create_base()
-    draw = ImageDraw.Draw(im)
-    for y in range(0, H, 4):
-        draw.line([(0, y), (W, y)], fill=(0, 0, 0, 120), width=1)
-    draw.rectangle([20, 25, 34, 45], fill=(0, 0, 0, 190))
-    draw.text((45, 28), "> _", fill=(0, 0, 0, 190))
-    return im
-
 def gen_lens():
     im = create_base()
     draw = ImageDraw.Draw(im)
@@ -159,16 +150,16 @@ generators = {
     "halftone": gen_halftone,
     "oscilloscope": gen_oscilloscope,
     "voronoi_shatter": gen_voronoi,
-    "terminal": gen_terminal,
     "lens": gen_lens,
     "dot_field": gen_dot_field,
     "flow_warp": gen_flow_warp,
 }
 
 all_effects = [
-    "ascii", "halftone", "dither", "glitch", "pixel_sort", "blur", "oscilloscope",
-    "datamosh", "cyanotype", "risograph", "thermal", "terminal", "electron_scan",
-    "kaleido", "mirror_tile", "flow_warp", "voronoi_shatter", "dot_field",
+    "ascii", "halftone", "dither", "glitch", "pixel_sort", "oscilloscope",
+    "datamosh", "risograph", "electron_scan", "contour", "prism_split",
+    "shockwave", "halation_grain", "kaleido", "flow_warp", "voronoi_shatter",
+    "fracture", "noise_field", "dot_field",
     "tunnel", "lens", "bloom", "feedback", "slit_scan", "post_fx"
 ]
 

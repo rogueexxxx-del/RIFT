@@ -9,8 +9,10 @@ Rectangle {
     property bool expanded: false
     // Populated by SCAN. Plain property, not a dummy Item holding a model.
     property var midiDevices: []
+    property bool scanned: false
 
     color: Theme.panel
+    radius: Theme.panelRadius
     // Only what is on screen. A closed panel is its header and nothing else.
     implicitHeight: hdr.height
                     + (expanded ? col.implicitHeight + Theme.padding * 2 : 0)
@@ -24,8 +26,9 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        title: "MIDI control"
-        hint: panel.active ? "connected" : ""
+        title: "MIDI / OSC control"
+        hint: (panel.viewport.midiOpen ? "MIDI connected" : "MIDI disconnected")
+              + (panel.viewport.oscOpen ? " · OSC listening" : "")
         marked: panel.active
         expanded: panel.expanded
         onToggled: panel.expanded = !panel.expanded
@@ -68,7 +71,7 @@ Rectangle {
                 active: panel.viewport.midiOpen
                 onClicked: {
                     if (panel.viewport.midiOpen) panel.viewport.closeMidi()
-                    else panel.midiDevices = panel.viewport.midiDevices()
+                    else { panel.midiDevices = panel.viewport.midiDevices(); panel.scanned = true }
                 }
             }
         }
@@ -84,6 +87,19 @@ Rectangle {
             }
         }
 
+        Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: panel.viewport.midiOpen
+                ? "MIDI connected: " + panel.viewport.midiName + ". Audio listening is separate."
+                : (panel.scanned && panel.midiDevices.length === 0
+                   ? "No MIDI controllers found. Connect a controller, then scan again."
+                   : "Scan for MIDI controllers, then select one to connect. Audio listening is separate.")
+            color: Theme.textMuted
+            font.family: Theme.fontUI
+            font.pixelSize: Theme.sizeSmall
+        }
+
         // ── OSC ──
         RowLayout {
             visible: panel.expanded
@@ -97,12 +113,15 @@ Rectangle {
                 Layout.preferredWidth: 34
             }
             Rectangle {
-                Layout.preferredWidth: 56
-                implicitHeight: 20
+                Layout.preferredWidth: 72
+                implicitHeight: Theme.control
+                radius: Theme.radius
                 color: Theme.bg
-                border.color: Theme.hairline
+                border.color: portField.activeFocus ? Theme.focusRing : Theme.hairline
                 TextInput {
                     id: portField
+                    activeFocusOnTab: true
+                    Accessible.name: "OSC UDP port"
                     anchors.fill: parent
                     anchors.margins: 3
                     text: "9000"
@@ -115,11 +134,12 @@ Rectangle {
                 }
             }
             FlatButton {
-                label: panel.viewport.oscOpen ? "Stop" : "Listen"
+                label: panel.viewport.oscOpen ? "Stop OSC" : "Listen to OSC"
+                enabled: panel.viewport.oscOpen || portField.acceptableInput
                 active: panel.viewport.oscOpen
                 onClicked: {
                     if (panel.viewport.oscOpen) panel.viewport.stopOsc()
-                    else panel.viewport.startOsc(parseInt(portField.text))
+                    else if (portField.acceptableInput) panel.viewport.startOsc(parseInt(portField.text))
                 }
             }
         }

@@ -1,0 +1,16 @@
+{
+  "id": "shockwave",
+  "name": "SHOCKWAVE",
+  "version": 1,
+  "frag": "shockwave.frag",
+  "category": "distort",
+  "uniforms": [
+    {"name":"centerX","label":"CENTER X","type":"float","min":0.0,"max":1.0,"step":0.01,"default":0.5,"discrete":false,"binding":{"channel":"kick","depth":0.12,"curve":"lin","attack":0.02,"release":0.25,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"centerY","label":"CENTER Y","type":"float","min":0.0,"max":1.0,"step":0.01,"default":0.5,"discrete":false,"binding":{"channel":"snare","depth":0.12,"curve":"lin","attack":0.02,"release":0.25,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"strength","label":"STRENGTH","type":"float","min":0.0,"max":0.08,"step":0.001,"default":0.025,"discrete":false,"binding":{"channel":"kick","depth":0.025,"curve":"lin","attack":0.01,"release":0.3,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"frequency","label":"FREQUENCY","type":"float","min":4.0,"max":48.0,"step":0.5,"default":20.0,"discrete":false,"binding":{"channel":"mids","depth":12.0,"curve":"lin","attack":0.08,"release":0.2,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"width","label":"RING WIDTH","type":"float","min":0.005,"max":0.08,"step":0.001,"default":0.025,"discrete":false,"binding":{"channel":"transient","depth":0.02,"curve":"lin","attack":0.01,"release":0.25,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"mixAmount","label":"MIX","type":"float","min":0.0,"max":1.0,"step":0.01,"default":0.9,"discrete":false,"binding":{"channel":"drums","depth":0.2,"curve":"lin","attack":0.01,"release":0.2,"in_lo":0.0,"in_hi":1.0}}
+  ],
+  "samplers": [{"name":"u_tex","unit":0,"source":"upstream"}]
+}

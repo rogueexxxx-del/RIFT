@@ -9,6 +9,8 @@
 #include "audio_system.hpp"
 #include "exporter.hpp"
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <vector>
 #if RIFT_WITH_FFMPEG
   #include "media_decoder.hpp"
@@ -18,11 +20,17 @@ namespace rift {
 
 // qsbDir: directory holding <id>.frag.qsb + engine_fullscreen.vert.qsb +
 // <id>.layout.json (produced by the qsb build step). Passed as `shaders_dir`.
-Engine::Engine(void* win, std::string shaders_dir, std::string cache_dir)
+Engine::Engine(void* win, std::string shaders_dir, std::string cache_dir,
+               bool start_thread)
     : win_(win), cache_dir_(std::move(cache_dir)) {
     // No shader cache: RhiContext loads .qsb itself. The cache dir IS used,
     // for the export's temporary mix bounce.
     rhi_ = std::make_unique<RhiContext>(shaders_dir);   // owns QRhi (D3D11)
+    if (start_thread) startRenderThread();
+}
+
+void Engine::startRenderThread() {
+    if (external_ || render_thread_.joinable()) return;
     running_ = true;
     render_thread_ = std::thread([this]{ renderLoop_(); });
 }
@@ -46,6 +54,15 @@ Engine::~Engine() {
 // Gradient + coarse checker, so "no footage loaded" reads as a deliberate
 // stand-in and a chain over it is visibly doing something.
 TexId Engine::emptySource_() {
+#if RIFT_WITH_FFMPEG
+    if (sequence_duration_.load() > 0.0 && timeline_ && timeline_->count() > 0) {
+        if (!black_source_) {
+            const uint8_t pixel[4] = {0, 0, 0, 255};
+            black_source_ = rhi_->uploadImage(pixel, 1, 1);
+        }
+        return black_source_;
+    }
+#endif
     if (placeholder_ || !rhi_) return placeholder_;
     constexpr int W = 640, H = 360;
     std::vector<uint8_t> img(size_t(W) * H * 4);
@@ -88,6 +105,7 @@ TexId Engine::renderExternal(int w, int h) {
     int ps = preview_scale_.load();
     if (ps == 2) { w /= 2; h /= 2; }
     else if (ps == 3) { w /= 4; h /= 4; }
+    rhi_->prepareScopeTargets(w, h);
 
     // Layered path: every clip covering the playhead, each through its own
     // stack, composited bottom lane up.
@@ -130,7 +148,8 @@ TexId Engine::renderExternal(int w, int h) {
 }
 
 #if RIFT_WITH_FFMPEG
-TexId Engine::renderLayers_(const rift_channel_frame& cf, double t, int w, int h) {
+TexId Engine::renderLayers_(const rift_channel_frame& cf, double t, int w, int h,
+                            double* media_ms) {
     if (!timeline_) return 0;
     // Text clips rasterize to this size, so it has to be current before any
     // frame is fetched.
@@ -148,9 +167,15 @@ TexId Engine::renderLayers_(const rift_channel_frame& cf, double t, int w, int h
     // whole track rather than restarting with the video.
     double look = t;
     const double trackDur = timeline_->duration();
-    if (trackDur > 0.0 && t >= trackDur) look = std::fmod(t, trackDur);
+    if (sequence_duration_.load() <= 0.0 && trackDur > 0.0 && t >= trackDur)
+        look = std::fmod(t, trackDur);
 
+    const auto media_start = media_ms ? std::chrono::steady_clock::now()
+                                      : std::chrono::steady_clock::time_point{};
     auto layers = timeline_->activeAt(look);
+    if (media_ms)
+        *media_ms += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - media_start).count();
     if (layers.empty()) return 0;
 
     auto isIdentityComposite = [](const ClipSpec* s) {
@@ -238,6 +263,7 @@ void Engine::renderLoop_() {
         int ps = preview_scale_.load();
         if (ps == 2) { w /= 2; h /= 2; }
         else if (ps == 3) { w /= 4; h /= 4; }
+        rhi_->prepareScopeTargets(w, h);
 
         // Layered: every clip covering the playhead through its own stack,
         // composited bottom lane up. Falls back to the shared graph over a
@@ -384,7 +410,8 @@ void Engine::feedScope_(double playhead, double dt) {
     float wave[kW] = {0}, spec[kW] = {0}, vecX[kW] = {0}, vecY[kW] = {0};
     const float* raw_spec = nullptr;
     if (audio_) {
-        audio_->getOscilloscope(playhead, wave, kW);
+        const auto [triggerLevel, holdoff] = graph_.scopeTriggerSettings();
+        audio_->getOscilloscope(playhead, wave, kW, 0.0f, triggerLevel, holdoff);
         audio_->getSpectrum(playhead, spec, kW, float(dt), slope_db_per_oct_.load(std::memory_order_relaxed));
         audio_->getVectorscope(playhead, vecX, vecY, kW);
         if (!audio_->rawSpectrum().empty()) raw_spec = audio_->rawSpectrum().data();
@@ -449,7 +476,8 @@ void Engine::applyPendingLoads_() {
     }
     if (do_audioclips) {
         if (!audio_) audio_ = std::make_unique<AudioSystem>(&channels_);
-        audio_->setAudioClips(aclips, audio_analysis);
+        // The export engine needs the mix and analysis, but no playback device.
+        audio_->setAudioClips(aclips, audio_analysis, win_ != nullptr || external_);
         audio_clips_ = aclips;         // remembered for the export bounce
         // The UI can hit play or scrub before this queued update lands (the
         // shell does exactly that on startup), so adopt the current transport
@@ -501,6 +529,9 @@ double Engine::audioClipStart(int i) const {
 }
 double Engine::audioClipSpan(int i) const {
     return audio_ ? audio_->audioClipSpan(i) : 0.0;
+}
+std::shared_ptr<const AudioMixer::SourceWaveform> Engine::audioClipWaveform(int i) const {
+    return audio_ ? audio_->audioClipWaveform(i) : nullptr;
 }
 bool Engine::audioReady() const { return audio_ && audio_->ready(); }
 double Engine::audioDuration() const { return audio_ ? audio_->duration() : 0.0; }
@@ -598,6 +629,7 @@ template <class Ex>
 bool Engine::runExportLoop_(Ex& ex, const rift_export_spec& s, int total) {
     const int fps = s.fps > 0 ? s.fps : 30;
     const int W = s.width & ~1, H = s.height & ~1;
+    rhi_->prepareScopeTargets(W, H);
 
     // Mark in / out. `first` is the frame the range starts at; `total` has
     // already been narrowed to the range by the caller.
@@ -607,6 +639,11 @@ bool Engine::runExportLoop_(Ex& ex, const rift_export_spec& s, int total) {
     if (audio_) { audio_->pause(); audio_->seek(ranged ? s.mark_in : 0.0); }
 
     const bool dbg = std::getenv("RIFT_DBG") != nullptr;
+    const bool profile = std::getenv("RIFT_EXPORT_PROFILE") != nullptr;
+    using clock = std::chrono::steady_clock;
+    double renderMs = 0.0, mediaMs = 0.0, readbackMs = 0.0, encodeMs = 0.0;
+    int measuredFrames = 0, encodedFrames = 0;
+    std::string exportError;
     std::vector<uint8_t> rgba;
     for (int i = 0; i < total && exporting_.load(std::memory_order_acquire); ++i) {
         // Real time, not time-since-in: keyframes, audio reactivity and clip
@@ -617,6 +654,7 @@ bool Engine::runExportLoop_(Ex& ex, const rift_export_spec& s, int total) {
         feedScope_(ph, 1.0 / double(fps));
         rift_channel_frame cf{}; channels_.latest(cf);
         cf.playhead = ph;                // keyframes read the playhead from here
+        const auto renderStart = profile ? clock::now() : clock::time_point{};
 
         // Same path as the preview: per-clip stacks, lane compositing and the
         // master grade all apply. Exporting through graph_.execute() alone
@@ -631,7 +669,7 @@ bool Engine::runExportLoop_(Ex& ex, const rift_export_spec& s, int total) {
         layers_.beginFrame(*rhi_, W, H);
         TexId scene = 0;
 #if RIFT_WITH_FFMPEG
-        scene = renderLayers_(cf, ph, W, H);
+        scene = renderLayers_(cf, ph, W, H, profile ? &mediaMs : nullptr);
 #endif
         const bool fellBack = (scene == 0);
         if (!scene) scene = graph_.execute(*rhi_, cf, emptySource_(), ph, W, H);
@@ -643,21 +681,45 @@ bool Engine::runExportLoop_(Ex& ex, const rift_export_spec& s, int total) {
         // Close it before the readback: reading a texture back needs the frame
         // that wrote it to have completed.
         rhi_->endFrame();
+        const auto readbackStart = profile ? clock::now() : clock::time_point{};
 
         if (dbg && i < 5)
             std::fprintf(stderr, "[export] frame %d ph=%.3f scene=%u%s\n",
                          i, ph, scene, fellBack ? " (no media)" : ""),
             std::fflush(stderr);
 
-        if (rhi_->readback(scene, W, H, rgba) && !ex.writeFrame(rgba.data())) {
-            err_ = ex.error();       // a dead encoder will not recover
-            return false;
+        if (!rhi_->readback(scene, W, H, rgba)) {
+            exportError = "frame readback failed";
+            break;
+        }
+        const auto readbackEnd = profile ? clock::now() : clock::time_point{};
+        // Keep encoding serial until the threaded path passes frame parity.
+        if (!ex.writeFrame(rgba.data())) {
+            exportError = ex.error();
+            if (exportError.empty()) exportError = "frame encode failed";
+            break;
+        }
+        if (profile) {
+            renderMs += std::chrono::duration<double, std::milli>(readbackStart - renderStart).count();
+            readbackMs += std::chrono::duration<double, std::milli>(readbackEnd - readbackStart).count();
+            encodeMs += std::chrono::duration<double, std::milli>(clock::now() - readbackEnd).count();
+            ++measuredFrames;
+            ++encodedFrames;
         }
 
         if (exp_cb_ && (i % 3 == 0)) exp_cb_(int(100.0 * i / total), 0, exp_user_);
     }
 
-    if (!ex.finish()) { err_ = ex.error(); return false; }
+    const bool finished = ex.finish();
+
+    if (profile && measuredFrames)
+        std::fprintf(stderr, "[export profile] %d frames: render %.2f ms (media %.2f ms), readback %.2f ms, encode %.2f ms per frame\n",
+                     measuredFrames, renderMs / measuredFrames, mediaMs / measuredFrames,
+                     readbackMs / measuredFrames,
+                     encodedFrames ? encodeMs / encodedFrames : 0.0);
+
+    if (!exportError.empty()) { err_ = exportError; return false; }
+    if (!finished) { err_ = ex.error(); return false; }
     return true;
 }
 
@@ -687,6 +749,7 @@ void Engine::runExport_() {
 #if RIFT_WITH_FFMPEG
     if (timeline_) dur = std::max(dur, timeline_->duration());
 #endif
+    if (sequence_duration_.load() > 0.0) dur = sequence_duration_.load();
     int total = int(dur * fps);
     // A marked range overrides the full duration.
     if (s.mark_out > s.mark_in) {

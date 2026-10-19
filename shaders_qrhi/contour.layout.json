@@ -1,0 +1,5 @@
+{
+  "id": "contour",
+  "params": ["levels", "thickness", "contrast", "mixAmount"],
+  "samplers": [["u_tex", 2]]
+}

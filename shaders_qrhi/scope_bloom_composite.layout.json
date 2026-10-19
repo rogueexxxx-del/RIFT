@@ -1,0 +1,1 @@
+{"id":"scope_bloom_composite","params":["intensity"],"samplers":[["u_tex",2],["u_bloom",3]]}

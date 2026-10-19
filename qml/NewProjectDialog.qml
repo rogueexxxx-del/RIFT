@@ -15,7 +15,7 @@ AppDialog {
     required property var viewport
 
     title: "New project"
-    width: 560
+    width: Math.min(600, Overlay.overlay ? Overlay.overlay.width - Theme.groupGap * 2 : 600)
     closePolicy: Popup.NoAutoClose
     standardButtons: Dialog.NoButton
 
@@ -60,7 +60,19 @@ AppDialog {
         close()
     }
 
-    contentItem: ColumnLayout {
+    contentItem: ScrollView {
+        id: formScroll
+        objectName: "newProjectScroll"
+        clip: true
+        implicitHeight: form.implicitHeight
+        contentWidth: availableWidth
+        contentHeight: form.implicitHeight
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+        ColumnLayout {
+        id: form
+        width: formScroll.availableWidth - Theme.groupGap
         spacing: Theme.groupGap
 
         // ── name ──
@@ -84,10 +96,10 @@ AppDialog {
                 font.pixelSize: Theme.size
                 leftPadding: 10
                 background: Rectangle {
-                    color: "#161616"
+                    color: Theme.sunken
                     radius: Theme.radius
-                    border.width: 1
-                    border.color: nameField.activeFocus ? Theme.accent : "#2E2E2E"
+                    border.width: nameField.activeFocus ? Theme.focusWidth : 1
+                    border.color: nameField.activeFocus ? Theme.focusRing : Theme.border
                 }
                 onAccepted: dlg.start(false)
             }
@@ -184,10 +196,10 @@ AppDialog {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: Theme.control + 6
-                        color: "#161616"
+                        color: Theme.sunken
                         radius: Theme.radius
                         border.width: 1
-                        border.color: "#2E2E2E"
+                        border.color: Theme.border
                         Text {
                             anchors.fill: parent
                             anchors.leftMargin: 10
@@ -234,6 +246,8 @@ AppDialog {
                 onClicked: dlg.start(false)
             }
         }
+    }
+
     }
 
     // Wired by Main so "Open a project…" reaches the menu's file dialog rather

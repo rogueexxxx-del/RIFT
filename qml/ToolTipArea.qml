@@ -12,5 +12,13 @@ Item {
         id: tip
         visible: hh.hovered && text !== ""
         delay: 400
+        font.family: Theme.fontUI
+        font.pixelSize: Theme.sizeSmall
+        background: Rectangle {
+            color: Theme.flyout
+            radius: Theme.radius
+            border.width: 1
+            border.color: Theme.popupBorder
+        }
     }
 }

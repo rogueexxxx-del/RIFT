@@ -8,9 +8,7 @@
     "dot_size"
   ],
   "samplers": [
-    [
-      "u_tex",
-      2
-    ]
+    ["u_tex", 2],
+    ["u_ascii_atlas", 3]
   ]
 }

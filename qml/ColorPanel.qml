@@ -19,7 +19,8 @@ Rectangle {
     // the source now driving it.
     signal channelPicked(int ch)
 
-    color: "#000000"
+    color: Theme.panel
+    radius: Theme.panelRadius
     // Only what is on screen. A closed panel is its header and nothing else.
     implicitHeight: hdr.height
                     + (expanded ? col.implicitHeight + Theme.padding * 2 : 0)
@@ -94,7 +95,7 @@ Rectangle {
 
                     ParamSlider {
                         id: gslider
-                        width: parent.width - 30
+                        width: parent.width
                         label: Theme.nice(modelData.label)
                         from: modelData.min
                         to: modelData.max
@@ -103,26 +104,7 @@ Rectangle {
                         patched: modelData.channel >= 0
                         keyed: gradeRow.keyCount > 0
                         onMoved: (v) => panel.viewport.setGradeParam(index, v)
-                    }
-
-                    Text {
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        width: 28
-                        horizontalAlignment: Text.AlignHCenter
-                        text: gradeRow.open ? "–" : "⋯"
-                        color: gradeRow.open ? Theme.text
-                             : gdHover.hovered ? Theme.textDim : Theme.textMuted
-                        font.family: Theme.fontUI
-                        font.pixelSize: Theme.sizeTitle + 3
-                        HoverHandler { id: gdHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler {
-                            onTapped: panel.openRow = gradeRow.open ? -1 : gradeRow.index
-                        }
-                        ToolTipArea {
-                            text: gradeRow.open ? "Hide keyframe and audio controls"
-                                                : "Keyframes, audio"
-                        }
+                        onLabelClicked: panel.openRow = gradeRow.open ? -1 : gradeRow.index
                     }
                 }
 
@@ -138,7 +120,8 @@ Rectangle {
                     font.pixelSize: Theme.sizeTiny
                 }
 
-                Row {
+                Flow {
+                    width: parent.width
                     visible: gradeRow.open
                     spacing: Theme.gapTight
                     // gradeKeyedNow/gradeKeyInterpNow rather than the grade
@@ -152,7 +135,6 @@ Rectangle {
                         ? panel.viewport.gradeKeyInterpNow[index] : -1
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         width: Theme.labelCol
                         text: "Key"
                         color: Theme.textMuted
@@ -161,27 +143,26 @@ Rectangle {
                     }
                     FlatButton {
                         small: true
-                        label: parent.here ? "Set" : "+"
+                        plain: true
+                        label: parent.here ? "Set key" : "Add key"
                         active: parent.here
-                        implicitWidth: 34
                         onClicked: panel.viewport.addGradeKey(index)
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: parent.here
                         label: ["Linear", "Ease", "Step"][Math.max(0, parent.interp)]
-                        implicitWidth: 44
                         onClicked: panel.viewport.cycleGradeKeyInterp(index)
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: parent.here
                         label: "Delete"
-                        implicitWidth: 34
                         onClicked: panel.viewport.removeGradeKeyAt(index)
                     }
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         visible: gradeRow.keyCount > 0
                         text: gradeRow.keyCount + " keys"
                         color: Theme.accent
@@ -190,16 +171,16 @@ Rectangle {
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: gradeRow.keyCount > 0
                         label: "Clear"
-                        implicitWidth: 34
                         onClicked: panel.viewport.clearGradeKeys(index)
                     }
                     FlatButton {
                         small: true
+                        plain: true
                         visible: panel.viewport.markers.length > 0
                         label: "Beats"
-                        implicitWidth: 44
                         onClicked: panel.viewport.keyGradeOnMarkers(index)
                     }
                 }

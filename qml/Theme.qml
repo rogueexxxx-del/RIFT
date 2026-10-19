@@ -20,29 +20,56 @@ QtObject {
     // accent-dim: accent at 18% on bg-1. Selected row background.
     readonly property color accentSoft:    Qt.tint(panel, Qt.rgba(accent.r, accent.g, accent.b, 0.18))
     // Text on an accent fill: darkest bg, unless the accent itself is dark.
-    readonly property color onAccent: (0.299 * accent.r + 0.587 * accent.g + 0.114 * accent.b) > 0.5
-                                      ? (preset === "light" ? "#0A0A0A" : bg) : "#FFFFFF"
+    readonly property color accentForeground: foregroundFor(Qt.rgba(accent.r, accent.g, accent.b, accent.a))
+    // Keep the legacy token linked when the accent changes.
+    readonly property alias onAccent: theme.accentForeground
+    readonly property color accentText: readableText(Qt.rgba(accent.r, accent.g, accent.b, accent.a),
+        Qt.rgba(panel.r, panel.g, panel.b, panel.a))
+    readonly property color focusRing: contrastRatio(Qt.rgba(accent.r, accent.g, accent.b, accent.a),
+        Qt.rgba(panel.r, panel.g, panel.b, panel.a)) >= 3 ? accent : text
+    readonly property color flyout: Qt.rgba(raised.r, raised.g, raised.b, preset === "contrast" ? 1 : 0.98)
+    readonly property color popupBorder: Qt.tint(panel, Qt.rgba(text.r, text.g, text.b, 0.20))
+    readonly property color inputBorder: preset === "contrast" ? text : (preset === "light" ? "#767676" : "#8D8D8D")
+    readonly property bool glowAllowed: preset !== "contrast" && !reduceMotion
 
-    property color bg:      "#070707"
-    property color panel:   "#0C0C0C"
-    property color raised:  "#121212"
-    property color hover:   "#1A1A1A"
-    property color sunken:  "#070707"
+    function luminance(color) {
+        const value = typeof color === "string" ? Qt.tint(color, "transparent") : color
+        function linear(value) { return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4) }
+        return 0.2126 * linear(value.r) + 0.7152 * linear(value.g) + 0.0722 * linear(value.b)
+    }
+    function contrastRatio(first, second) {
+        const a = luminance(first), b = luminance(second)
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+    }
+    function foregroundFor(background) {
+        return contrastRatio(Qt.rgba(0, 0, 0, 1), background) >= contrastRatio(Qt.rgba(1, 1, 1, 1), background)
+            ? Qt.rgba(0, 0, 0, 1) : Qt.rgba(1, 1, 1, 1)
+    }
+    function readableText(color, background) {
+        return contrastRatio(color, background) >= 4.5 ? color : foregroundFor(background)
+    }
 
-    property color text:         "#EDEDED"
-    property color textDim:      "#A8A8A8"
-    property color textMuted:    "#808080"   // WCAG AA compliant (5.2:1 contrast against panel)
-    property color textDisabled: "#4D4D4D"
+    property color bg:      "#202020"
+    property color panel:   "#272727"
+    property color raised:  "#323232"
+    property color hover:   "#3D3D3D"
+    property color sunken:  "#202020"
 
-    property color hairline:    "#222222"
-    property color border:      "#333333"
-    property color borderHover: "#555555"
+    property color text:         "#F3F3F3"
+    property color textDim:      "#D1D1D1"
+    property color textMuted:    "#B3B3B3"
+    property color textDisabled: "#777777"
+
+    property color hairline:    "#383838"
+    property color border:      "#555555"
+    property color borderHover: "#8A8A8A"
 
     readonly property color ok:     "#46C26B"
     readonly property color warn:   "#F5A524"
     readonly property color danger: "#E5484D"
 
-    // Audio channel colours. Fixed: never follow theme or accent.
+    // Audio channel colours can be overridden in Preferences.
+    property var channelColorOverrides: ({})
     readonly property var channelColors: ({
         "BAS": "#FF5A36", "KIK": "#FF3D40", "BASS": "#FF5A36", "KICK": "#FF3D40", "SUB": "#FF5A36",
         "MID": "#FFB020", "SNR": "#FFB020", "MELODY": "#FFB020", "MIDS": "#FFB020", "SNARE": "#FFB020",
@@ -51,10 +78,19 @@ QtObject {
         "BPM": "#FF6FB5", "TIM": "#FF6FB5", "PITCH": "#FF6FB5"
     })
     function channelColor(name) {
-        const c = channelColors[String(name).toUpperCase()]
+        const key = String(name).toUpperCase()
+        const c = channelColorOverrides[key] || channelColors[key]
         return c ? c : textDim
     }
 
+    function setChannelColor(name, value) {
+        const next = Object.assign({}, channelColorOverrides)
+        if (value) next[String(name).toUpperCase()] = value
+        else delete next[String(name).toUpperCase()]
+        channelColorOverrides = next
+    }
+
+    property var effectColorOverrides: ({})
     readonly property var effectColors: ({
         "ascii":           "#E5D633",
         "dither":          "#7B2EFF",
@@ -79,6 +115,12 @@ QtObject {
         "solarize":        "#B5179E",
         "threshold":       "#7209B7",
         "voronoi_shatter": "#E76F51",
+        "fracture":        "#E76F51",
+        "noise_field":     "#7B2EFF",
+        "contour":         "#FF0054",
+        "prism_split":     "#00F5D4",
+        "shockwave":       "#FA1E21",
+        "halation_grain": "#D4A373",
         "lens":            "#A855F7",
         "flow_warp":       "#2A9D8F",
         "vortex":          "#264653",
@@ -97,15 +139,22 @@ QtObject {
         "post_fx":         "#475569"
     })
     function effectColor(name) {
-        const c = effectColors[String(name).toLowerCase()]
+        const key = String(name).toLowerCase()
+        const c = effectColorOverrides[key] || effectColors[key]
         return c ? c : accent
     }
 
+    function setEffectColor(name, value) {
+        const next = Object.assign({}, effectColorOverrides)
+        if (value) next[String(name).toLowerCase()] = value
+        else delete next[String(name).toLowerCase()]
+        effectColorOverrides = next
+    }
+
     // ── type ──
-    // Ships with the bundled face (Geist). Geist has tabular figures, so
-    // fontMono is only kept for hex fields and code/timecode callers.
-    property string fontUI:   "Geist"
-    property string fontMono: "Geist Mono"
+    // Use Windows typography; keep fixed-width values for timecode and fields.
+    property string fontUI:   "Segoe UI Variable"
+    property string fontMono: "Consolas"
     property url assetsUrl: ""
     function asset(subpath) {
         if (!assetsUrl || assetsUrl.toString() === "") return ""
@@ -113,50 +162,50 @@ QtObject {
         if (!base.endsWith("/")) base += "/"
         return base + subpath
     }
-    readonly property url logo: (assetsUrl && assetsUrl.toString() !== "")
-        ? (preset === "light" ? asset("logo/SVG/RIFT BLK.svg") : asset("logo/SVG/RIFT WHT.svg"))
-        : ""
-    readonly property url monogram: (assetsUrl && assetsUrl.toString() !== "")
-        ? (preset === "light" ? asset("logo/SVG/BLK MONOGRAM.svg") : asset("logo/SVG/WHT MONOGRAM.svg"))
-        : ""
+    readonly property url logo: asset("logo_wordmark.png")
+    readonly property url monogram: asset("logo_monogram.png")
 
     // Sizes at the "Small" setting; applyScale multiplies.
-    property int sizeBig:   18   // timecode, fps
-    property int sizeTitle: 14   // dialog title
-    property int size:      12   // body
-    property int sizeSmall: 11   // label / value
-    property int sizeTiny:  10   // micro label (UPPERCASE, +0.08em)
+    property int sizeBig:   24   // timecode, fps
+    property int sizeTitle: 20   // dialog title
+    property int size:      14   // body
+    property int sizeSmall: 12   // label / value
+    property int sizeTiny:  12   // micro label (UPPERCASE, +0.08em)
     readonly property int labelSize: size
     readonly property real microSpacing: sizeTiny * 0.08
 
     // ── themes ──
     // A preset only overrides surface/line/text tokens; accent stays the user's.
     readonly property var presets: ({
-        "darker":   { bg: "#070707", panel: "#0C0C0C", raised: "#121212", hover: "#1A1A1A",
-                      hairline: "#222222", border: "#333333", borderHover: "#555555",
-                      text: "#EDEDED", textDim: "#A8A8A8", textMuted: "#808080", textDisabled: "#4D4D4D" },
-        "dark":     { bg: "#0E0E0E", panel: "#141414", raised: "#1B1B1B", hover: "#242424",
-                      hairline: "#242424", border: "#3E3E3E", borderHover: "#555555",
-                      text: "#EDEDED", textDim: "#B0B0B0", textMuted: "#888888", textDisabled: "#555555" },
+        "darker":   { bg: "#181818", panel: "#202020", raised: "#292929", hover: "#333333",
+                      hairline: "#383838", border: "#555555", borderHover: "#8A8A8A",
+                      text: "#F3F3F3", textDim: "#D1D1D1", textMuted: "#AAAAAA", textDisabled: "#777777" },
+        "dark":     { bg: "#202020", panel: "#272727", raised: "#323232", hover: "#3D3D3D",
+                      hairline: "#383838", border: "#555555", borderHover: "#8A8A8A",
+                      text: "#F3F3F3", textDim: "#D1D1D1", textMuted: "#B3B3B3", textDisabled: "#777777" },
         "contrast": { bg: "#000000", panel: "#000000", raised: "#0A0A0A", hover: "#1A1A1A",
                       hairline: "#2A2A2A", border: "#FFFFFF", borderHover: "#FFFFFF",
                       text: "#FFFFFF", textDim: "#E0E0E0", textMuted: "#B8B8B8", textDisabled: "#666666" },
-        "light":    { bg: "#E6E6E3", panel: "#F0F0EE", raised: "#FFFFFF", hover: "#DCDCD8",
-                      hairline: "#D0D0CC", border: "#111111", borderHover: "#4A4A4A",
-                      text: "#0A0A0A", textDim: "#444444", textMuted: "#666666", textDisabled: "#555555" }
+        "light":    { bg: "#F3F3F3", panel: "#FFFFFF", raised: "#F9F9F9", hover: "#EAEAEA",
+                      hairline: "#DEDEDE", border: "#B5B5B5", borderHover: "#767676",
+                      text: "#1B1B1B", textDim: "#434343", textMuted: "#606060", textDisabled: "#888888" }
     })
 
-    property string preset: "darker"
-    property real   textScale: 1.1
+    property string preset: "system"
+    property real   textScale: 1
+    readonly property int systemColorScheme: Qt.styleHints.colorScheme
+    onSystemColorSchemeChanged: if (preset === "system") applyPreset("system")
 
     function applyPreset(name) {
-        const p = presets[name]
+        const p = presets[name === "system" ? (systemColorScheme === Qt.Dark ? "dark" : "light") : name]
         if (!p) return
         preset = name
         bg = p.bg; sunken = p.bg; panel = p.panel; raised = p.raised; hover = p.hover
         hairline = p.hairline; border = p.border; borderHover = p.borderHover
         text = p.text; textDim = p.textDim; textMuted = p.textMuted; textDisabled = p.textDisabled
+        Qt.styleHints.colorScheme = name === "system" ? Qt.Unknown : name === "light" ? Qt.Light : Qt.Dark
     }
+    Component.onCompleted: applyPreset(preset)
 
     // Shader manifests and effect ids are written in caps ("MODE", "pixel_sort")
     // because they are data, not prose. Nothing in the UI should shout, so they
@@ -180,28 +229,31 @@ QtObject {
 
     // Small 1.0, Default 1.1, Large 1.25, Largest 1.5.
     function applyScale(s) {
-        textScale = s
-        sizeBig   = Math.round(18 * s)
-        sizeTitle = Math.round(14 * s)
-        size      = Math.round(12 * s)
-        sizeSmall = Math.round(11 * s)
-        sizeTiny  = Math.round(10 * s)
-        control   = s >= 1.5 ? 32 : s >= 1.25 ? 28 : s >= 1.1 ? 24 : 22
-        rowHeight = control + 4
-        toolbar   = Math.round(32 * s)
+        if (!isFinite(s) || s <= 0) return
+        textScale = Math.max(1, Math.min(s, 1.75))
+        sizeBig   = Math.round(24 * textScale)
+        sizeTitle = Math.round(20 * textScale)
+        size      = Math.round(14 * textScale)
+        sizeSmall = Math.round(12 * textScale)
+        sizeTiny  = Math.round(12 * textScale)
+        control   = Math.round(32 * textScale / 4) * 4
+        rowHeight = control + 8
+        toolbar   = control + 8
     }
 
     // ── shape / spacing (4px grid: 4 8 12 16 24 32) ──
-    property int control:   24   // button / field / dropdown height
-    property int rowHeight: 28   // list rows, chain rows, panel headers
-    property int toolbar:   35   // top bar / toolbars (32 x scale)
-    readonly property int header: 28
+    property int control:   32   // button / field / dropdown height
+    property int rowHeight: 40   // list rows, chain rows, panel headers
+    property int toolbar:   40   // top bar / toolbars (32 x scale)
+    readonly property int header: toolbar
     readonly property int padding:  12
     readonly property int gap:      8
     readonly property int gapTight: 4
     readonly property int labelCol: 44
     readonly property int groupGap: 16
-    readonly property int radius:   4    // subtle rounded corners matching Figma
+    readonly property int radius:   4
+    readonly property int panelRadius: 8
+    readonly property int focusWidth: 2
 
     // ── motion ──
     property bool reduceMotion: false

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import QtCore
 
 // Appearance settings. Presets plus an accent, not a colour well per surface -
@@ -10,22 +11,44 @@ import QtCore
 AppDialog {
     id: dlg
     title: "Preferences"
-    width: 480
+    width: Math.min(620, Overlay.overlay ? Overlay.overlay.width - Theme.groupGap * 2 : 620)
     standardButtons: Dialog.Close
 
     required property var viewport
+    property var effectIds: []
     property bool advanced: false
+    property bool pickingChannel: false
+    property string pickingKey: ""
+
+    function saveColor(channel, key, value) {
+        if (channel) {
+            Theme.setChannelColor(key, value)
+            prefs.channelColorsJson = JSON.stringify(Theme.channelColorOverrides)
+        } else {
+            Theme.setEffectColor(key, value)
+            prefs.effectColorsJson = JSON.stringify(Theme.effectColorOverrides)
+        }
+    }
+
+    ColorDialog {
+        id: colorPicker
+        title: "Choose color"
+        onAccepted: dlg.saveColor(dlg.pickingChannel, dlg.pickingKey,
+                                  selectedColor.toString())
+    }
 
     // Persisted across runs. Written on change, read at startup.
     Settings {
         id: prefs
         category: "appearance"
-        property string preset: "dark"
+        property string preset: "system"
         property string accent: "#E8442E"
         property real   scale: 1.0
-        // "" means the bundled Geist stack; anything else is a family the user
+        // "" means the Windows UI face; anything else is a family the user
         // picked out of the fonts installed on this machine.
         property string uiFont: ""
+        property string effectColorsJson: "{}"
+        property string channelColorsJson: "{}"
     }
 
     Component.onCompleted: {
@@ -33,6 +56,10 @@ AppDialog {
         Theme.applyScale(prefs.scale)
         Theme.accent = prefs.accent
         if (prefs.uiFont !== "") Theme.fontUI = prefs.uiFont
+        try { Theme.effectColorOverrides = JSON.parse(prefs.effectColorsJson) || ({}) }
+        catch (e) { Theme.effectColorOverrides = ({}) }
+        try { Theme.channelColorOverrides = JSON.parse(prefs.channelColorsJson) || ({}) }
+        catch (e) { Theme.channelColorOverrides = ({}) }
     }
 
     readonly property var accents: [
@@ -40,7 +67,19 @@ AppDialog {
         "#A78BFA", "#F472B6", "#E5E5E5"
     ]
 
-    contentItem: ColumnLayout {
+    contentItem: ScrollView {
+        id: formScroll
+        objectName: "preferencesScroll"
+        clip: true
+        implicitHeight: form.implicitHeight
+        contentWidth: availableWidth
+        contentHeight: form.implicitHeight
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+
+        ColumnLayout {
+        id: form
+        width: formScroll.availableWidth - Theme.groupGap
         spacing: Theme.groupGap
 
         // ── theme ──
@@ -57,13 +96,15 @@ AppDialog {
                 Layout.fillWidth: true
                 spacing: Theme.gap
                 Repeater {
-                    model: [{ k: "dark",     n: "Dark" },
+                    model: [{ k: "system",   n: "System" },
+                            { k: "dark",     n: "Dark" },
                             { k: "darker",   n: "Darker" },
                             { k: "contrast", n: "High contrast" },
                             { k: "light",    n: "Light" }]
                     delegate: FlatButton {
                         required property var modelData
                         label: modelData.n
+                        objectName: "theme-" + modelData.k
                         active: Theme.preset === modelData.k
                         onClicked: {
                             Theme.applyPreset(modelData.k)
@@ -94,16 +135,97 @@ AppDialog {
                         width: 34; height: 26
                         radius: Theme.radius
                         color: modelData
-                        border.width: Theme.accent === modelData ? 2 : 1
-                        border.color: Theme.accent === modelData ? Theme.text
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Accent " + modelData
+                        border.width: activeFocus ? Theme.focusWidth : (Theme.accent === modelData ? 2 : 1)
+                        border.color: activeFocus ? Theme.focusRing : Theme.accent === modelData ? Theme.text
                                                                  : Theme.hairline
+                        function choose() {
+                            Theme.accent = modelData
+                            prefs.accent = modelData
+                        }
+                        Keys.onSpacePressed: choose()
+                        Keys.onReturnPressed: choose()
                         TapHandler {
-                            onTapped: {
-                                Theme.accent = parent.modelData
-                                prefs.accent = parent.modelData
-                            }
+                            onTapped: parent.choose()
                         }
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
+                    }
+                }
+            }
+        }
+
+        // ── text size ──
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.gap
+            Text {
+                text: "Node and audio colors"
+                color: Theme.textDim
+                font.family: Theme.fontUI
+                font.pixelSize: Theme.size
+            }
+            Repeater {
+                model: [
+                    { label: "Effect node", keys: dlg.effectIds, channel: false },
+                    { label: "Audio parameter", keys: dlg.viewport.channelNames.map(c => c.name), channel: true }
+                ]
+                delegate: RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: Theme.gap
+
+                    Text {
+                        text: modelData.label
+                        color: Theme.textMuted
+                        font.family: Theme.fontUI
+                        font.pixelSize: Theme.sizeSmall
+                        Layout.preferredWidth: 105
+                    }
+                    ComboBox {
+                        id: colorTarget
+                        Layout.fillWidth: true
+                        model: modelData.keys
+                        contentItem: Text {
+                            leftPadding: 8
+                            text: Theme.nice(colorTarget.currentText)
+                            color: Theme.text
+                            font.family: Theme.fontUI
+                            font.pixelSize: Theme.sizeSmall
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            color: Theme.raised
+                            border.width: 1
+                            border.color: Theme.border
+                        }
+                    }
+                    Rectangle {
+                        width: 36
+                        height: 24
+                        color: modelData.channel
+                               ? Theme.channelColor(colorTarget.currentText)
+                               : Theme.effectColor(colorTarget.currentText)
+                        border.width: 1
+                        border.color: Theme.textDim
+                        HoverHandler { cursorShape: Qt.PointingHandCursor }
+                        TapHandler {
+                            onTapped: {
+                                dlg.pickingChannel = modelData.channel
+                                dlg.pickingKey = colorTarget.currentText
+                                colorPicker.selectedColor = parent.color
+                                colorPicker.open()
+                            }
+                        }
+                        ToolTipArea { text: "Choose color" }
+                    }
+                    FlatButton {
+                        plain: true
+                        small: true
+                        label: "Reset"
+                        onClicked: dlg.saveColor(modelData.channel,
+                                                 colorTarget.currentText, "")
                     }
                 }
             }
@@ -158,12 +280,12 @@ AppDialog {
                     id: fontPick
                     Layout.fillWidth: true
                     fonts: dlg.viewport.systemFonts()
-                    defaultLabel: "Geist (bundled)"
+                    defaultLabel: "Segoe UI Variable (default)"
                     selected: prefs.uiFont
                     onPicked: function (family) {
                         prefs.uiFont = family
                         Theme.fontUI = family === ""
-                            ? "Geist, Segoe UI, sans-serif" : family
+                            ? "Segoe UI Variable" : family
                     }
                 }
 
@@ -256,6 +378,7 @@ AppDialog {
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeTiny
             visible: dlg.advanced
+        }
         }
     }
 }

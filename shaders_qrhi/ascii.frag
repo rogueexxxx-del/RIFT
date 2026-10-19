@@ -31,6 +31,7 @@ layout(std140, binding = 0) uniform Engine {
 #define u_color_fg2     uFg2.rgb
 
 layout(binding = 2) uniform sampler2D u_tex;
+layout(binding = 3) uniform sampler2D u_ascii_atlas;
 
 layout(std140, binding = 1) uniform Params { vec4 _p[2]; };
 #define columns _p[0].x
@@ -129,12 +130,6 @@ void main() {
 
     float shape = 0.0;
 
-    // The user-typed glyph atlas that used to head this chain is gone: nothing
-    // ever uploaded u_ascii_atlas, and buildSrb only resolves u_tex, the
-    // second input and the three named audio/feedback samplers - every other
-    // binding silently falls through to the 1x1 dummy. u_ascii_count was never
-    // in the manifest either, so drawPass zero-filled it and the branch could
-    // not be entered. Bring it back with a real atlas upload, not a uniform.
     if (active_charset == 0) {
         // CHARSET 0 - True ASCII ramp " .:-=+*#%@" via 5x5 procedural glyphs
         int glyph_idx = int(clamp(floor(lum * 10.0), 0.0, 9.0));
@@ -143,11 +138,23 @@ void main() {
         shape = glyphPixel(glyph_idx, glyph_local);
     }
     else if (active_charset == 1) {
+        const float glyph_count = 15.0;
+        int glyph_idx = int(clamp(floor(lum * glyph_count), 0.0,
+                                  glyph_count - 1.0));
+        vec2 glyph_local = local / max(eff_dot_size, 0.05);
+        vec2 atlas_uv = vec2((float(glyph_idx) + glyph_local.x + 0.5)
+                             / glyph_count,
+                             glyph_local.y + 0.5);
+        float inside = step(abs(glyph_local.x), 0.5)
+                     * step(abs(glyph_local.y), 0.5);
+        shape = texture(u_ascii_atlas, clamp(atlas_uv, 0.0, 1.0)).r * inside;
+    }
+    else if (active_charset == 2) {
         // CHARSET 1 - Block fill
         float half_size = lum * 0.48 * eff_dot_size;
         shape = step(max(abs(local.x), abs(local.y)), half_size);
     }
-    else if (active_charset == 2) {
+    else if (active_charset == 3) {
         // CHARSET 2 - Line density
         float line_count_local = floor(lum * 6.0 * eff_dot_size) + 1.0;
         float line_pattern = step(0.5, fract(local.y * line_count_local + 0.5));

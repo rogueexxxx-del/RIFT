@@ -1,0 +1,5 @@
+{
+  "id": "prism_split",
+  "params": ["direction", "spreadPx", "mixAmount"],
+  "samplers": [["u_tex", 2]]
+}

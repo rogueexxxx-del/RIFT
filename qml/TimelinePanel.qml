@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls   // AppDialog's base, for the remove prompt
 import QtQuick.Dialogs
+import QtQuick.Window
+import QtQuick.Shapes
 
 // Full-width timeline: a timestamp ruler over stacked clip lanes (V1, V2, ...),
 // like a standard editor. Time runs left to right; higher lanes sit on top when
@@ -11,12 +13,23 @@ import QtQuick.Dialogs
 Rectangle {
     id: panel
     required property var viewport
+    property bool shortcutsSuspended: false
+    readonly property var focusedEditor: Window.window ? Window.window.activeFocusItem : null
+    readonly property bool shortcutsEnabled: visible && !shortcutsSuspended
+        && !(focusedEditor instanceof TextInput) && !(focusedEditor instanceof TextEdit)
+    readonly property int targetClip: viewport.selectedClip >= 0 ? viewport.selectedClip : viewport.activeClipIndex
 
-    property int laneH: 36
+    property int laneH: 40
+    readonly property int audioLaneH: laneH + 24
     readonly property int laneGap: 3
     readonly property int headW: 54
-    // Lanes shown: whatever is in use, plus one empty lane to drop into.
-    readonly property int lanes: Math.max(2, panel.viewport.laneCount + 1)
+    // Keep useful tracks first; offer a spare drop lane only when it fits.
+    readonly property int usedVideoLanes: Math.max(1, panel.viewport.laneCount)
+    readonly property real availableTracksH: Math.max(0, height - tracksViewport.y - 16)
+    readonly property real usedTracksH: usedVideoLanes * (laneH + laneGap)
+        + audioLanes * (audioLaneH + laneGap) + 16
+    readonly property int lanes: usedVideoLanes + (panel.viewport.clips.length > 0
+        && availableTracksH >= usedTracksH + laneH + laneGap ? 1 : 0)
     readonly property int audioLanes: Math.max(1, panel.viewport.audioLaneCount)
 
     // ── view window ──
@@ -26,10 +39,25 @@ Rectangle {
     // Lane a clip is currently being dragged onto, -1 when nothing is moving.
     property int dropLane: -1
     property int dropAudioLane: -1
+    // Undo may rebuild a model while a delegate still owns the mouse grab.
+    property int editRevision: 0
+    Connections {
+        target: panel.viewport
+        function onClipsChanged() { panel.editRevision += 1 }
+        function onAudioClipsChanged() { panel.editRevision += 1 }
+    }
 
     property real zoom: 1.0
     property real viewStart: 0.0
-    readonly property real fullSpan: Math.max(10, panel.viewport.trackDuration * 1.08)
+    // Editing includes media beyond the export sequence bounds.
+    readonly property real editExtent: {
+        let end = Math.max(0, viewport.trackDuration)
+        const all = viewport.clips.concat(viewport.audioClips)
+        for (let i = 0; i < all.length; ++i)
+            end = Math.max(end, all[i].start + (all[i].span > 0 ? all[i].span : 5))
+        return end
+    }
+    readonly property real fullSpan: Math.max(10, editExtent * 1.08)
     readonly property real span: fullSpan / zoom
     readonly property real pxPerSec: laneArea.width / span
 
@@ -55,47 +83,110 @@ Rectangle {
 
     function timeAt(px) { return viewStart + px / pxPerSec }
     function xOf(t)     { return (t - viewStart) * pxPerSec }
+    function parseTime(text) {
+        const value = text.trim()
+        if (/^\d+(\.\d+)?$/.test(value)) return Number(value)
+        const parts = /^(\d+):([0-5]\d(?:\.\d+)?)$/.exec(value)
+        return parts ? Number(parts[1]) * 60 + Number(parts[2]) : NaN
+    }
+    readonly property real songEnd: {
+        let end = 0
+        const clips = viewport.audioClips
+        for (let i = 0; i < clips.length; ++i) {
+            const clip = clips[i]
+            if (Number.isFinite(clip.start) && clip.start >= 0 && Number.isFinite(clip.span)
+                && clip.span > 0 && clip.sourceDuration > 0)
+                end = Math.max(end, clip.start + clip.span)
+        }
+        return end
+    }
+
+    function peakBetween(peaks, duration, from, to) {
+        if (!peaks || !peaks.length || duration <= 0 || to <= 0 || from >= duration) return 0
+        const first = Math.max(0, Math.floor(from / duration * peaks.length))
+        const last = Math.min(peaks.length, Math.max(first + 1, Math.ceil(to / duration * peaks.length)))
+        let peak = 0
+        for (let i = first; i < last; ++i)
+            if (Number.isFinite(peaks[i])) peak = Math.max(peak, Math.abs(peaks[i]))
+        return Math.min(1, peak)
+    }
+
+    readonly property bool hasRange: viewport.markOut > viewport.markIn
+    readonly property real rangeLeft: Math.max(0, Math.min(laneArea.width, xOf(viewport.markIn)))
+    readonly property real rangeRight: Math.max(0, Math.min(laneArea.width, xOf(viewport.markOut)))
+    function formatTime(t) {
+        const cs = Math.round(Math.max(0, t) * 100)
+        return Math.floor(cs / 6000) + ":" + (Math.floor(cs / 100) % 60).toString().padStart(2, "0")
+            + "." + (cs % 100).toString().padStart(2, "0")
+    }
 
     // Vertical track scrolling
     property real trackScrollY: 0
-    readonly property real totalTracksH: lanes * (laneH + laneGap) + audioLanes * (laneH + laneGap) + 16
-    readonly property real visibleTracksH: Math.max(60, panel.height - (Theme.control + 24) - 20 - 18)
+    readonly property real totalTracksH: lanes * (laneH + laneGap) + audioLanes * (audioLaneH + laneGap) + 16
+    readonly property real visibleTracksH: tracksViewport.height
     readonly property real maxTrackScrollY: Math.max(0, totalTracksH - visibleTracksH)
+    onMaxTrackScrollYChanged: trackScrollY = Math.min(trackScrollY, maxTrackScrollY)
 
     property string activeTool: "select"
     property real razorMouseX: -1
 
     // Snap a clip drag to the things an edit usually wants to line up with:
     // the start of the piece, the playhead, and the head or tail of any other
-    // clip. Respects panel.viewport.snap toggle so dragging is never sticky when off.
-    function snapPx(startSec, dx, skipIndex) {
-        if (!panel.viewport.snap) return dx
+    // clip. Respects the beat snap toggle so dragging is free when off.
+    function snapPx(startSec, dx, skipIndex, duration, audio) {
+        if (!panel.viewport.snapToMarkers) return dx
         const want = startSec + dx / pxPerSec
+        const edges = [0, duration || 0]
         let best = dx
-        let bestPx = 6
+        let bestPx = 4
         const targets = [0, panel.viewport.playhead]
+        if (panel.hasRange) targets.push(panel.viewport.markIn, panel.viewport.markOut)
+        const beats = panel.viewport.markers
+        for (let i = 0; i < beats.length; ++i) targets.push(beats[i])
         const cl = panel.viewport.clips
         for (let i = 0; i < cl.length; ++i) {
-            if (i === skipIndex) continue    // its own edges are not a target
+            if (!audio && i === skipIndex) continue    // its own edges are not a target
             targets.push(cl[i].start)
             targets.push(cl[i].start + cl[i].span)
         }
         const acl = panel.viewport.audioClips
         for (let i = 0; i < acl.length; ++i) {
+            if (audio && i === skipIndex) continue
             targets.push(acl[i].start)
             targets.push(acl[i].start + acl[i].span)
         }
         for (let k = 0; k < targets.length; ++k) {
-            const d = Math.abs(want - targets[k]) * pxPerSec
-            if (d < bestPx) {
-                bestPx = d
-                best = (targets[k] - startSec) * pxPerSec
+            for (let e = 0; e < edges.length; ++e) {
+                const candidate = targets[k] - edges[e]
+                const d = Math.abs(want - candidate) * pxPerSec
+                if (candidate >= 0 && d < bestPx) {
+                    bestPx = d
+                    best = (candidate - startSec) * pxPerSec
+                }
             }
         }
         return best
     }
     function clampView() {
         viewStart = Math.max(0, Math.min(viewStart, fullSpan - span))
+    }
+    onFullSpanChanged: clampView()
+    function navigateWheel(ev, anchorPx) {
+        const horizontal = ev.pixelDelta.x || ev.angleDelta.x
+        const vertical = ev.pixelDelta.y || ev.angleDelta.y
+        if (ev.modifiers & (Qt.AltModifier | Qt.ControlModifier)) {
+            const delta = vertical || horizontal
+            if (delta !== 0) zoomBy(Math.pow(1.25, delta / 120), anchorPx)
+        } else if (ev.modifiers & Qt.ShiftModifier || horizontal !== 0) {
+            const delta = horizontal || vertical
+            viewStart -= (ev.pixelDelta.x || ev.pixelDelta.y)
+                       ? delta / Math.max(1, pxPerSec) : delta / 120 * span * 0.15
+            clampView()
+        } else {
+            trackScrollY = Math.max(0, Math.min(maxTrackScrollY,
+                trackScrollY - (ev.pixelDelta.y || ev.angleDelta.y / 120 * 36)))
+        }
+        ev.accepted = true
     }
     function zoomBy(f, anchorPx) {
         const tAnchor = timeAt(anchorPx)
@@ -113,27 +204,93 @@ Rectangle {
         target: null
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: (ev) => {
-            if (ev.modifiers & Qt.AltModifier || ev.modifiers & Qt.ControlModifier) {
-                const mouseRelX = Math.max(0, ev.x - (Theme.padding + panel.headW))
-                panel.zoomBy(ev.angleDelta.y > 0 ? 1.25 : 0.8, mouseRelX)
-            } else if (ev.modifiers & Qt.ShiftModifier || ev.angleDelta.x !== 0) {
-                const delta = ev.angleDelta.x !== 0 ? ev.angleDelta.x : ev.angleDelta.y
-                panel.viewStart -= (delta / 120) * panel.span * 0.15
-                panel.clampView()
-            } else {
-                // Vertical track scrolling
-                panel.trackScrollY = Math.max(0, Math.min(panel.maxTrackScrollY, panel.trackScrollY - (ev.angleDelta.y / 120) * 36))
-            }
+            // Vertical track scrolling
+            panel.navigateWheel(ev, Math.max(0, Math.min(laneArea.width,
+                ev.x - (Theme.padding + panel.headW))))
         }
     }
 
     // Which clip a right-click is asking to delete, -1 for none.
     property int pendingRemove: -1
     property int pendingRemoveAudio: -1
+    property int selectedAudioClip: -1
+    property int contextIndex: -1
+    property bool contextAudio: false
+    function requestRemove(index, audio) {
+        pendingRemove = audio ? -1 : index
+        pendingRemoveAudio = audio ? index : -1
+        removeConfirm.open()
+    }
+    function openClipMenu(index, audio, item, point) {
+        contextIndex = index
+        contextAudio = audio
+        selectedAudioClip = audio ? index : -1
+        if (!audio) viewport.selectClip(index)
+        clipMenu.popup(item, point)
+    }
+    onEditRevisionChanged: {
+        clipMenu.close()
+        removeConfirm.close()
+        pendingRemove = -1
+        pendingRemoveAudio = -1
+        selectedAudioClip = -1
+        contextIndex = -1
+    }
+    StyledMenu {
+        id: clipMenu
+        objectName: "clipContextMenu"
+        readonly property var source: panel.contextAudio ? panel.viewport.audioClips : panel.viewport.clips
+        readonly property var clipData: panel.contextIndex >= 0 ? source[panel.contextIndex] : null
+        StyledMenuItem {
+            objectName: "clipCopyAction"
+            implicitHeight: 28
+            leftPadding: 14
+            rightPadding: 14
+            text: "Copy"
+            shortcutText: "Ctrl+C"
+            enabled: !panel.contextAudio && panel.contextIndex >= 0
+            onTriggered: panel.viewport.copyClip(panel.contextIndex)
+        }
+        StyledMenuItem {
+            objectName: "clipPasteAction"
+            implicitHeight: 28
+            leftPadding: 14
+            rightPadding: 14
+            text: "Paste at playhead"
+            shortcutText: "Ctrl+V"
+            // The engine clipboard supports video/text clips only.
+            enabled: !panel.contextAudio && panel.viewport.hasClipboard
+            onTriggered: panel.viewport.pasteClip(panel.viewport.playhead, clipMenu.clipData.lane)
+        }
+        StyledMenuItem {
+            objectName: "clipSplitAction"
+            implicitHeight: 28
+            leftPadding: 14
+            rightPadding: 14
+            text: "Split at playhead"
+            enabled: clipMenu.clipData !== null && clipMenu.clipData !== undefined
+                && panel.viewport.playhead > clipMenu.clipData.start + 0.1
+                && panel.viewport.playhead < clipMenu.clipData.start + clipMenu.clipData.span - 0.1
+            onTriggered: {
+                if (panel.contextAudio) panel.viewport.splitAudioClip(panel.contextIndex, panel.viewport.playhead)
+                else panel.viewport.splitClip(panel.contextIndex, panel.viewport.playhead)
+            }
+        }
+        StyledMenuItem {
+            objectName: "clipDeleteAction"
+            implicitHeight: 28
+            leftPadding: 14
+            rightPadding: 14
+            text: "Delete"
+            shortcutText: "Delete"
+            enabled: panel.contextIndex >= 0
+            onTriggered: panel.requestRemove(panel.contextIndex, panel.contextAudio)
+        }
+    }
 
     color: Theme.bg
     // toolbar + ruler + video lanes + audio lanes + bottom scrollbar
-    implicitHeight: Theme.control + 20 + (lanes + audioLanes) * (laneH + laneGap) + 30
+    implicitHeight: 84 + usedTracksH
 
     FileDialog {
         id: addDialog
@@ -170,21 +327,48 @@ Rectangle {
         anchors.leftMargin: Theme.padding
         anchors.rightMargin: Theme.padding
         anchors.topMargin: 8
-        height: Theme.control
+        height: 32
+        Flickable {
+            id: toolStrip
+            objectName: "timelineToolStrip"
+            width: parent.width
+            height: parent.height
+            contentWidth: toolRow.width
+            contentHeight: height
+            flickableDirection: Flickable.HorizontalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            WheelHandler {
+                target: null
+                onWheel: (event) => {
+                    const delta = event.pixelDelta.x || event.pixelDelta.y
+                        || (event.angleDelta.x || event.angleDelta.y) / 2
+                    toolStrip.contentX = Math.max(0, Math.min(toolStrip.contentWidth - toolStrip.width,
+                        toolStrip.contentX - delta))
+                    event.accepted = true
+                }
+            }
+            Row {
+                id: toolRow
+                objectName: "timelineToolsRow"
+                height: toolbar.height
+                spacing: 12
 
         Row {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 6
+            height: toolbar.height
+            spacing: 2
 
             // Selection Tool (<->)
             EditToolButton {
                 kind: "select"
+                active: panel.activeTool === "select"
                 tip: "Selection Tool (V)"
+                onClicked: panel.activeTool = "select"
             }
 
             // Text Tool (T)
             EditToolButton {
+                id: textTool
                 kind: "text"
                 tip: "Text Tool (T)"
                 onClicked: {
@@ -206,26 +390,11 @@ Rectangle {
             // Stretch Until End Tool (| <-> |)
             EditToolButton {
                 kind: "stretch_end"
-                enabled: panel.viewport.activeClipIndex >= 0
+                enabled: panel.targetClip >= 0
                 tip: "Stretch clip until track end"
-                onClicked: panel.viewport.fillTrack(panel.viewport.activeClipIndex)
+                onClicked: panel.viewport.fillTrack(panel.targetClip)
             }
 
-            // Copy
-            EditToolButton {
-                kind: "copy"
-                enabled: panel.viewport.activeClipIndex >= 0
-                tip: "Copy selected clip (Ctrl+C)"
-                onClicked: panel.viewport.copyClip(panel.viewport.activeClipIndex)
-            }
-
-            // Paste
-            EditToolButton {
-                kind: "paste"
-                enabled: panel.viewport.hasClipboard
-                tip: "Paste at playhead (Ctrl+V)"
-                onClicked: panel.viewport.pasteClip(panel.viewport.playhead, -1)
-            }
 
             // Add Video Clip Icon
             EditToolButton {
@@ -241,53 +410,47 @@ Rectangle {
                 onClicked: addAudioDialog.open()
             }
 
-            // Remove Clip
-            EditToolButton {
-                kind: "remove"
-                enabled: panel.viewport.activeClipIndex >= 0
-                tip: "Remove selected clip (Delete)"
-                onClicked: {
-                    panel.pendingRemove = panel.viewport.activeClipIndex
-                    removeConfirm.open()
-                }
-            }
+
         }
 
         Row {
             id: controls
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            height: toolbar.height
             spacing: Theme.gap
 
-            // Keyframe add button
-            Rectangle {
-                width: 26; height: 22
-                radius: 4
-                color: keyHover.hovered ? "#262626" : "#181818"
-                border.width: 1
-                border.color: keyHover.hovered ? "#3A3A3A" : "#242424"
-                Text {
-                    anchors.centerIn: parent
-                    text: "◆"
-                    color: keyHover.hovered ? "#FFFFFF" : "#CCCCCC"
-                    font.pixelSize: 11
+            EditToolButton {
+                id: keyTool
+                kind: "keyframe"
+                tip: "Add keyframe to first effect parameter (K)"
+                enabled: panel.viewport.params && panel.viewport.params.length > 0
+                onClicked: {
+                    if (panel.viewport.params && panel.viewport.params.length > 0)
+                        panel.viewport.addKey(0)
                 }
-                HoverHandler { id: keyHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler {
-                    onTapped: {
-                        if (panel.viewport.params && panel.viewport.params.length > 0)
-                            panel.viewport.addKey(0)
-                    }
-                }
-                ToolTipArea { text: "Add keyframe at playhead (K)" }
             }
 
-            // Lane Height adjustment toggle (compact / expand)
             FlatButton {
+                anchors.verticalCenter: parent.verticalCenter
+                plain: true
+                small: true
                 label: panel.laneH > 40 ? "Compact" : "Expand"
-                implicitWidth: 62
                 onClicked: panel.laneH = (panel.laneH > 40 ? 34 : 52)
                 ToolTipArea { text: "Toggle vertical lane height" }
+            }
+
+            FlatButton {
+                anchors.verticalCenter: parent.verticalCenter
+                plain: true
+                small: true
+                objectName: "rangeButton"
+                label: "Range"
+                onClicked: {
+                    rangeStart.text = panel.formatTime(panel.viewport.markIn)
+                    rangeEnd.text = panel.formatTime(panel.hasRange ? panel.viewport.markOut : panel.viewport.trackDuration)
+                    sequenceSettings.error = ""
+                    sequenceSettings.open()
+                }
+                ToolTipArea { text: "Set export Start / End, Song end, or Entire timeline" }
             }
 
             Text {
@@ -304,6 +467,9 @@ Rectangle {
             }
 
             FlatButton {
+                anchors.verticalCenter: parent.verticalCenter
+                plain: true
+                small: true
                 label: "−"; implicitWidth: 28
                 onClicked: panel.zoomBy(0.8, laneArea.width / 2)
                 ToolTipArea { text: "Zoom out" }
@@ -316,9 +482,56 @@ Rectangle {
                 font.pixelSize: Theme.sizeSmall
             }
             FlatButton {
+                anchors.verticalCenter: parent.verticalCenter
+                plain: true
+                small: true
                 label: "+"; implicitWidth: 28
                 onClicked: panel.zoomBy(1.25, laneArea.width / 2)
                 ToolTipArea { text: "Zoom in" }
+            }
+        }
+        Row {
+            height: toolbar.height
+            spacing: 2
+            EditToolButton {
+                kind: "mark_in"
+                tip: "Mark In at playhead (I)"
+                onClicked: panel.viewport.setMarkIn(panel.viewport.playhead)
+            }
+            EditToolButton {
+                kind: "mark_out"
+                tip: "Mark Out at playhead (O)"
+                onClicked: panel.viewport.setMarkOut(panel.viewport.playhead)
+            }
+            EditToolButton {
+                kind: "go_in"
+                tip: "Go to In"
+                onClicked: panel.viewport.seek(panel.viewport.markIn)
+            }
+            EditToolButton {
+                kind: "go_out"
+                enabled: panel.hasRange
+                tip: "Go to Out"
+                onClicked: panel.viewport.seek(panel.viewport.markOut)
+            }
+            EditToolButton {
+                kind: "clear_marks"
+                enabled: panel.viewport.markIn > 0 || panel.viewport.markOut > 0
+                tip: "Clear In and Out"
+                onClicked: panel.viewport.clearMarks()
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: panel.hasRange ? "IN " + panel.formatTime(panel.viewport.markIn)
+                    + "   OUT " + panel.formatTime(panel.viewport.markOut)
+                    + "   DURATION " + panel.formatTime(panel.viewport.markOut - panel.viewport.markIn)
+                    : "IN " + panel.formatTime(panel.viewport.markIn) + "   OUT not set"
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.sizeSmall
+            }
+        }
             }
         }
     }
@@ -336,11 +549,20 @@ Rectangle {
 
         Item {
             id: rulerArea
+            clip: true
             anchors.left: parent.left
             anchors.leftMargin: panel.headW
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: parent.height
+
+            Rectangle {
+                visible: panel.hasRange
+                x: panel.rangeLeft
+                width: Math.max(0, panel.rangeRight - panel.rangeLeft)
+                height: parent.height
+                color: Qt.rgba(1, 1, 1, 0.14)
+            }
 
             // Tick every N seconds, N chosen so labels never crowd.
             readonly property real step: {
@@ -364,15 +586,10 @@ Rectangle {
                     panel.viewport.seek(Math.max(0, panel.timeAt(centroid.position.x)))
             }
             WheelHandler {
-                // Ctrl+wheel zooms about the cursor; plain wheel pans.
-                onWheel: (ev) => {
-                    if (ev.modifiers & Qt.ControlModifier)
-                        panel.zoomBy(ev.angleDelta.y > 0 ? 1.25 : 0.8, ev.x)
-                    else {
-                        panel.viewStart -= (ev.angleDelta.y / 120) * panel.span * 0.1
-                        panel.clampView()
-                    }
-                }
+                // Same modifiers and scroll direction as the track area.
+                target: null
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (ev) => panel.navigateWheel(ev, ev.x)
             }
 
             Repeater {
@@ -432,18 +649,65 @@ Rectangle {
                 }
             }
 
+            Rectangle {
+                x: panel.xOf(panel.viewport.playhead) - width / 2
+                anchors.bottom: parent.bottom
+                width: 9
+                height: 10
+                color: "#FFFFFF"
+                visible: x + width >= 0 && x <= parent.width
+                z: 250
+            }
+
+            Repeater {
+                model: 2
+                delegate: Item {
+                    required property int index
+                    objectName: index === 0 ? "rangeIn" : "rangeOut"
+                    readonly property bool isIn: index === 0
+                    x: panel.xOf(isIn ? panel.viewport.markIn : panel.viewport.markOut) - width / 2
+                    width: 12
+                    height: rulerArea.height
+                    visible: isIn || panel.hasRange
+                    z: 260
+                    Rectangle {
+                        x: parent.width / 2
+                        width: 1; height: parent.height
+                        color: Theme.text
+                    }
+                    Rectangle {
+                        x: parent.isIn ? parent.width / 2 : 0
+                        width: parent.width / 2; height: 3
+                        color: Theme.text
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        preventStealing: true
+                        onPositionChanged: (mouse) => {
+                            if (!pressed) return
+                            const t = Math.max(0, Math.min(panel.editExtent,
+                                panel.timeAt(mapToItem(rulerArea, mouse.x, mouse.y).x)))
+                            if (parent.isIn)
+                                panel.viewport.setMarkIn(panel.hasRange ? Math.min(t, panel.viewport.markOut - 0.01) : t)
+                            else
+                                panel.viewport.setMarkOut(Math.max(panel.viewport.markIn + 0.01, t))
+                        }
+                    }
+                }
+            }
         }
     }
 
     // ── Track Viewport: vertically scrollable container for all video and audio lanes ──
     Item {
         id: tracksViewport
+        objectName: "tracksViewport"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: ruler.bottom
         anchors.topMargin: 2
-        anchors.bottom: navScrollbar.top
-        anchors.bottomMargin: 3
+        height: Math.max(0, Math.min(panel.totalTracksH, panel.height - y - 16))
         clip: true
 
         HoverHandler {
@@ -457,13 +721,6 @@ Rectangle {
             }
         }
 
-        TapHandler {
-            onTapped: {
-                if (panel.activeTool !== "razor") {
-                    panel.viewport.selectClip(-1)
-                }
-            }
-        }
 
         Item {
             id: tracksContent
@@ -480,26 +737,10 @@ Rectangle {
                 y: 0
                 width: 2
                 height: parent.height
-                color: "#FF3344"
+                color: Theme.text
                 z: 300
 
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    anchors.topMargin: 2
-                    width: 38
-                    height: 16
-                    radius: 3
-                    color: "#FF3344"
-                    Text {
-                        anchors.centerIn: parent
-                        text: "RAZOR"
-                        color: "#FFFFFF"
-                        font.family: Theme.fontUI
-                        font.pixelSize: 8
-                        font.bold: true
-                    }
-                }
+
             }
 
             // ── lanes ──
@@ -524,10 +765,11 @@ Rectangle {
 
                 // Track Header Box: solid, neutral (no permanent blue V1 highlight)
                 Rectangle {
+                    objectName: "videoHeader" + index
                     anchors.left: parent.left
                     width: panel.headW - 4
                     height: parent.height
-                    radius: 3
+                    radius: 0
                     color: Theme.panel
                     border.width: 1
                     border.color: Theme.border
@@ -547,11 +789,10 @@ Rectangle {
                     anchors.leftMargin: panel.headW
                     anchors.right: parent.right
                     height: parent.height
-                    radius: 3
+                    radius: 0
                     color: Theme.bg
-                    border.width: (panel.viewport.clipDragging && panel.dropLane === (panel.lanes - 1 - index)) ? 2 : 1
-                    border.color: (panel.viewport.clipDragging && panel.dropLane === (panel.lanes - 1 - index))
-                                  ? Theme.accent : Theme.hairline
+                    border.width: 1
+                    border.color: Theme.hairline
                 }
             }
         }
@@ -561,6 +802,8 @@ Rectangle {
     // vertical drag can cross lanes without leaving its parent item.
     Item {
         id: laneArea
+        objectName: "videoLaneArea"
+        clip: true
         anchors.left: parent.left
         anchors.leftMargin: Theme.padding + panel.headW
         anchors.right: parent.right
@@ -598,6 +841,7 @@ Rectangle {
 
             delegate: Item {
                 id: clip
+                objectName: "videoClip" + index
                 required property int index
                 required property var modelData
 
@@ -609,12 +853,11 @@ Rectangle {
                 property real trimL: 0
                 property real trimR: 0
 
-                x: panel.xOf(modelData.start) + dragDx + trimL
-                // Snapped to whole lanes while dragging: a clip floating
-                // between two rows gives no answer to "which lane will this
-                // land on".
-                y: laneArea.laneY(dropLaneIdx)
-                width: Math.max(26, spanSec * panel.pxPerSec - trimL + trimR)
+                x: Math.round(panel.xOf(modelData.start) + dragDx + trimL)
+                // Preview follows the pointer; only the committed lane is quantized.
+                y: laneArea.laneY(modelData.lane) + dragDy
+                z: body.active ? 400 : 0
+                width: Math.max(26, Math.round(spanSec * panel.pxPerSec - trimL + trimR))
                 height: panel.laneH
 
                 property real dragDx: 0
@@ -628,29 +871,34 @@ Rectangle {
 
                 readonly property bool isSelected: clip.index === panel.viewport.selectedClip
 
-                // Clip Body with tactile bevel depth
+                // Clip body uses one sharp outline and a separate name band.
                 Rectangle {
                     anchors.fill: parent
-                    radius: 3
+                    radius: 0
+                    clip: true
                     color: clip.isSelected ? Qt.lighter(Theme.raised, 1.25) : Theme.raised
-                    border.width: clip.isSelected ? 2 : 1
-                    border.color: clip.isSelected ? Theme.accent : Theme.border
+                    border.width: body.active ? 2 : 1
+                    border.color: body.active || clip.isSelected ? Theme.accent : Theme.border
                     opacity: body.active ? 0.85 : 1.0
 
-                    // Top highlight bevel (stops clips from looking flat)
+                    // A quiet name band separates clip labels from their content.
                     Rectangle {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        height: 1
-                        color: Qt.rgba(1, 1, 1, 0.12)
+                        anchors.margins: 1
+                        height: 18
+                        color: Qt.lighter(Theme.raised, 1.35)
                     }
 
                     Text {
+                        objectName: "videoClipLabel" + clip.index
                         anchors.left: parent.left
-                        anchors.leftMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 16
+                        anchors.leftMargin: Math.max(8, 8 - clip.x)
+                        y: 2
+                        height: 16
+                        width: Math.max(0, parent.width - anchors.leftMargin - 8)
+                        verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideMiddle
                         visible: clip.width >= 32
                         text: body.active && clip.laneShift !== 0
@@ -658,7 +906,9 @@ Rectangle {
                               : clip.modelData.name
                         color: Theme.text
                         font.family: Theme.fontUI
-                        font.pixelSize: Theme.sizeSmall
+                        font.pixelSize: Math.max(11, Theme.sizeSmall)
+                        font.weight: Font.Medium
+                        renderType: Text.NativeRendering
                     }
 
                     // Prominent Keyframe diamonds on the clip for automation
@@ -701,90 +951,139 @@ Rectangle {
                                 : (body.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
                 }
 
-                DragHandler {
+                MouseArea {
                     id: body
-                    target: null
-                    enabled: panel.activeTool !== "razor"
-                    onActiveChanged: {
-                        panel.viewport.clipDragging = active
-                        panel.dropLane = active
-                            ? clip.dropLaneIdx : -1
-                        if (active) return
-                        if (clip.laneShift !== 0)
-                            panel.viewport.setClipLane(
-                                clip.index, clip.modelData.lane + clip.laneShift)
-                        panel.viewport.setClipStart(
-                            clip.index,
-                            clip.modelData.start + clip.dragDx / panel.pxPerSec)
-                        clip.dragDx = 0; clip.dragDy = 0
+                    anchors.fill: parent
+                    Connections {
+                        target: panel
+                        function onEditRevisionChanged() { if (body.armed) body.resetGesture() }
                     }
-                    onCentroidChanged: {
-                        if (!active) return
-                        // Scene coordinates: this handler lives on the clip
-                        // it is moving, so a delta taken in the clip's own
-                        // frame cancels out the movement it just caused and
-                        // the clip trails the pointer instead of following it.
-                        const dx = centroid.scenePosition.x
-                                 - centroid.scenePressPosition.x
-                        // Never let a clip be dragged before zero: the engine
-                        // clamps it anyway, so allowing it just means the clip
-                        // stops following the mouse with no explanation.
-                        const minDx = -clip.modelData.start * panel.pxPerSec
-                        clip.dragDx = panel.snapPx(
-                            clip.modelData.start, Math.max(minDx, dx),
-                            clip.index)
-                        clip.dragDy = centroid.scenePosition.y
-                                    - centroid.scenePressPosition.y
+                    acceptedButtons: Qt.LeftButton
+                    preventStealing: true
+                    readonly property bool active: armed && moved
+                    property bool armed: false
+                    property bool moved: false
+                    property int originalIndex: -1
+                    property int pressRevision: 0
+                    property real originalStart: 0
+                    property real originalDuration: 0
+                    property real originalScale: 1
+                    property int originalLane: 0
+                    property point pressScene
+                    function resetGesture() {
+                        armed = false
+                        moved = false
+                        clip.dragDx = 0; clip.dragDy = 0
+                        panel.dropLane = -1
+                        panel.viewport.clipDragging = false
+                    }
+                    onPressed: (mouse) => {
+                        pressRevision = panel.editRevision
+                        originalIndex = clip.index
+                        originalStart = clip.modelData.start
+                        originalDuration = clip.spanSec
+                        originalScale = panel.pxPerSec
+                        originalLane = clip.modelData.lane
+                        pressScene = mapToItem(null, mouse.x, mouse.y)
+                        moved = false
+                        armed = panel.activeTool === "select"
+                    }
+                    onPositionChanged: (mouse) => {
+                        if (!pressed || !armed) return
+                        const scene = mapToItem(null, mouse.x, mouse.y)
+                        const dx = scene.x - pressScene.x
+                        const dy = scene.y - pressScene.y
+                        if (!moved && Math.abs(dx) + Math.abs(dy) < 8) return
+                        moved = true
+                        clip.dragDx = panel.snapPx(originalStart,
+                            Math.max(-originalStart * originalScale, dx),
+                            originalIndex, originalDuration, false)
+                        clip.dragDy = dy
+                        panel.viewport.clipDragging = true
                         panel.dropLane = clip.dropLaneIdx
                     }
-                }
-                // Click selects the clip (or cuts it if Razor tool is active)
-                TapHandler {
-                    onTapped: (pt) => {
-                        if (panel.activeTool === "razor") {
-                            const cutT = panel.timeAt(clip.x + pt.position.x)
-                            panel.viewport.splitClip(clip.index, cutT)
-                        } else {
-                            panel.viewport.selectClip(clip.index)
+                    onReleased: (mouse) => {
+                        if (pressRevision !== panel.editRevision || (!armed && panel.activeTool !== "razor")) return
+                        const commit = armed && moved
+                        const idx = originalIndex
+                        const start = originalStart + clip.dragDx / originalScale
+                        const lane = clip.dropLaneIdx
+                        const cutTime = panel.timeAt(mapToItem(laneArea, mouse.x, mouse.y).x)
+                        const changed = Math.abs(start - originalStart) > 0.000001 || lane !== originalLane
+                        // A model reset can destroy this delegate synchronously.
+                        resetGesture()
+                        if (commit && changed) panel.viewport.moveClip(idx, start, lane)
+                        else if (!commit) {
+                            if (panel.activeTool === "razor") panel.viewport.splitClip(idx, cutTime)
+                            else { panel.selectedAudioClip = -1; panel.viewport.selectClip(clip.index) }
                         }
                     }
+                    onCanceled: resetGesture()
+                    Component.onDestruction: if (armed) resetGesture()
                 }
                 // Right-click asks first. It used to delete instantly, which
                 // is a lot of lost work one stray click away.
                 TapHandler {
                     acceptedButtons: Qt.RightButton
-                    onTapped: {
-                        panel.pendingRemove = clip.index
-                        removeConfirm.open()
-                    }
+                    onTapped: (point) => panel.openClipMenu(clip.index, false, clip, point.position)
                 }
 
                 ClipTrimHandle {
+                    revision: panel.editRevision
                     anchors.left: parent.left
                     height: parent.height
-                    // Clamped so the head cannot pass the tail: a clip trimmed
-                    // to nothing is unselectable and looks like it was deleted.
-                    onMoved: (dx) => clip.trimL =
-                        Math.min(dx, clip.width - 26)
+                    enabled: panel.activeTool === "select"
+                    property int originalIndex: -1
+                    property real originalIn: 0
+                    property real originalOut: 0
+                    property real originalScale: 1
+                    property real originalWidth: 0
+                    onStarted: {
+                        originalIndex = clip.index
+                        originalIn = clip.modelData.in
+                        originalOut = clip.modelData.out > originalIn
+                            ? clip.modelData.out : originalIn + clip.spanSec
+                        originalScale = panel.pxPerSec
+                        originalWidth = clip.width
+                    }
+                    onMoved: (dx) => clip.trimL = Math.min(dx, originalWidth - 26)
                     onDragged: (dx) => {
+                        const idx = originalIndex
+                        const value = Math.min(dx, originalWidth - 26) / originalScale
+                        const inTime = originalIn + value
+                        const outTime = originalOut
                         clip.trimL = 0
-                        panel.viewport.setClipTrim(
-                            clip.index, clip.modelData.in + dx / panel.pxPerSec,
-                            clip.modelData.out)
+                        if (Math.abs(value) > 0.000001)
+                            panel.viewport.setClipTrim(idx, inTime, outTime)
                     }
                 }
                 ClipTrimHandle {
+                    revision: panel.editRevision
                     anchors.right: parent.right
                     height: parent.height
-                    onMoved: (dx) => clip.trimR =
-                        Math.max(dx, 26 - clip.width)
+                    enabled: panel.activeTool === "select"
+                    property int originalIndex: -1
+                    property real originalIn: 0
+                    property real originalOut: 0
+                    property real originalScale: 1
+                    property real originalWidth: 0
+                    onStarted: {
+                        originalIndex = clip.index
+                        originalIn = clip.modelData.in
+                        originalOut = clip.modelData.out > originalIn
+                            ? clip.modelData.out : originalIn + clip.spanSec
+                        originalScale = panel.pxPerSec
+                        originalWidth = clip.width
+                    }
+                    onMoved: (dx) => clip.trimR = Math.max(dx, 26 - originalWidth)
                     onDragged: (dx) => {
+                        const idx = originalIndex
+                        const value = Math.max(dx, 26 - originalWidth) / originalScale
+                        const inTime = originalIn
+                        const outTime = originalOut + value
                         clip.trimR = 0
-                        const cur = clip.modelData.out > clip.modelData.in
-                                  ? clip.modelData.out
-                                  : clip.modelData.in + clip.spanSec
-                        panel.viewport.setClipTrim(clip.index, clip.modelData.in,
-                                                   cur + dx / panel.pxPerSec)
+                        if (Math.abs(value) > 0.000001)
+                            panel.viewport.setClipTrim(idx, inTime, outTime)
                     }
                 }
             }
@@ -792,15 +1091,12 @@ Rectangle {
 
         // Playhead across every lane. Scrub from the ruler above.
         Rectangle {
-            width: 1
+            width: 2
             height: parent.height
-            color: Theme.text
+            color: "#FFFFFF"
             visible: x >= 0 && x <= parent.width
-            x: {
-                const d = panel.viewport.trackDuration
-                const t = d > 0 ? panel.viewport.playhead % d : panel.viewport.playhead
-                return panel.xOf(t)
-            }
+            z: 250
+            x: panel.xOf(panel.viewport.playhead)
         }
     }
 
@@ -820,16 +1116,17 @@ Rectangle {
             delegate: Item {
                 required property int index
                 width: audioLaneStack.width
-                height: panel.laneH
+                height: panel.audioLaneH
 
                 readonly property bool isA1: index === 0
 
                 // Audio Track Header Box: solid, dark, clean green channel tag
                 Rectangle {
+                    objectName: "audioHeader" + index
                     anchors.left: parent.left
                     width: panel.headW - 4
                     height: parent.height
-                    radius: 3
+                    radius: 0
                     color: Theme.panel
                     border.width: 1
                     border.color: Theme.border
@@ -849,10 +1146,10 @@ Rectangle {
                     anchors.leftMargin: panel.headW
                     anchors.right: parent.right
                     height: parent.height
-                    radius: 3
+                    radius: 0
                     color: Theme.bg
-                    border.width: (panel.viewport.clipDragging && panel.dropAudioLane === index) ? 2 : 1
-                    border.color: (panel.viewport.clipDragging && panel.dropAudioLane === index) ? Theme.ok : Theme.hairline
+                    border.width: 1
+                    border.color: Theme.hairline
                 }
             }
         }
@@ -860,15 +1157,17 @@ Rectangle {
 
     Item {
         id: audioLaneArea
+        objectName: "audioLaneArea"
+        clip: true
         anchors.left: parent.left
         anchors.leftMargin: Theme.padding + panel.headW
         anchors.right: parent.right
         anchors.rightMargin: Theme.padding
         anchors.top: audioLaneStack.top
-        height: panel.audioLanes * (panel.laneH + panel.laneGap)
+        height: panel.audioLanes * (panel.audioLaneH + panel.laneGap)
 
         function laneY(lane) {
-            return lane * (panel.laneH + panel.laneGap)
+            return lane * (panel.audioLaneH + panel.laneGap)
         }
 
         // Time grid, aligned to the ruler so clip edges read against it.
@@ -893,6 +1192,7 @@ Rectangle {
 
             delegate: Item {
                 id: audioClip
+                objectName: "audioClip" + index
                 required property int index
                 required property var modelData
 
@@ -900,32 +1200,35 @@ Rectangle {
                 property real trimL: 0
                 property real trimR: 0
 
-                x: panel.xOf(modelData.start) + dragDx + trimL
-                y: audioLaneArea.laneY(dropLaneIdx)
-                width: Math.max(26, spanSec * panel.pxPerSec - trimL + trimR)
-                height: panel.laneH
+                x: Math.round(panel.xOf(modelData.start) + dragDx + trimL)
+                y: audioLaneArea.laneY(modelData.lane) + dragDy
+                z: audioBody.active ? 400 : 0
+                width: Math.max(26, Math.round(spanSec * panel.pxPerSec - trimL + trimR))
+                height: panel.audioLaneH
 
                 property real dragDx: 0
                 property real dragDy: 0
-                property int laneShift: Math.round(dragDy / (panel.laneH + panel.laneGap))
+                property int laneShift: Math.round(dragDy / (panel.audioLaneH + panel.laneGap))
                 readonly property int dropLaneIdx: Math.max(0, Math.min(
                     panel.audioLanes - 1, modelData.lane + laneShift))
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: 3
+                    radius: 0
+                    clip: true
                     color: "#142618"
-                    border.width: 1
-                    border.color: "#24522E"
+                    border.width: audioBody.active ? 2 : 1
+                    border.color: audioBody.active ? Theme.ok : "#24522E"
                     opacity: audioBody.active ? 0.85 : 1.0
 
-                    // Top highlight bevel (stops clips from looking flat)
+                    // Keep the name above the waveform instead of painting over it.
                     Rectangle {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        height: 1
-                        color: Qt.rgba(1, 1, 1, 0.12)
+                        anchors.margins: 1
+                        height: 18
+                        color: "#183320"
                     }
 
                     Rectangle {
@@ -935,46 +1238,60 @@ Rectangle {
                         color: Theme.ok
                     }
 
-                    // Waveform rendered directly inside the audio clip - crisp, high-density antialiased lines
-                    Canvas {
-                        anchors.fill: parent
-                        anchors.leftMargin: 6
-                        anchors.rightMargin: 6
-                        property var peaks: panel.viewport.waveform
-                        onPeaksChanged: requestPaint()
-                        onPaint: {
-                            const ctx = getContext("2d")
-                            ctx.reset()
-                            const n = peaks ? peaks.length : 0
-                            if (n === 0 || width <= 0) return
-                            const mid = height / 2.0
-                            const clipIn = audioClip.modelData.in || 0
-                            const clipSpan = audioClip.spanSec
-
-                            ctx.fillStyle = "#5BE08A"
-                            for (let px = 0; px < width; px += 1.5) {
-                                const t = clipIn + (px / width) * clipSpan
-                                const b = Math.floor((t / Math.max(1, panel.fullSpan)) * n)
-                                if (b < 0 || b >= n) continue
-                                const amp = Math.max(1.2, peaks[b] * (mid - 2) * 0.95)
-                                ctx.fillRect(px, mid - amp, 1.2, amp * 2)
+                    // Vector geometry stays sharp at native DPI and only covers visible pixels.
+                    Shape {
+                        id: waveformShape
+                        objectName: "audioWaveform" + audioClip.index
+                        x: Math.max(4, -audioClip.x)
+                        y: 20
+                        width: Math.max(0, Math.min(audioClip.width - 4,
+                            audioLaneArea.width - audioClip.x) - x)
+                        height: Math.max(0, parent.height - 23)
+                        preferredRendererType: Shape.CurveRenderer
+                        readonly property var peaks: audioClip.modelData.waveform || []
+                        readonly property real sourceDuration: audioClip.modelData.sourceDuration || 0
+                        readonly property real displayGain: audioClip.modelData.gain === undefined
+                            ? 1 : Math.max(0, audioClip.modelData.gain)
+                        readonly property var outline: {
+                            if (!peaks.length || sourceDuration <= 0 || width <= 0 || height <= 0) return []
+                            const top = [], bottom = []
+                            const mid = Math.floor(height / 2)
+                            const sourceIn = (audioClip.modelData.in || 0) + audioClip.trimL / panel.pxPerSec
+                            for (let px = 0; px < Math.ceil(width); px += 2) {
+                                const time = sourceIn + (x + px) / panel.pxPerSec
+                                const peak = panel.peakBetween(peaks, sourceDuration, time, time + 2 / panel.pxPerSec)
+                                const amp = Math.round(Math.min(1, peak * displayGain) * Math.max(0, mid - 1))
+                                const end = Math.min(width, px + 1)
+                                const gap = Math.min(width, px + 2)
+                                top.push(Qt.point(px, mid - amp), Qt.point(end, mid - amp), Qt.point(end, mid), Qt.point(gap, mid))
+                                bottom.push(Qt.point(px, mid + amp), Qt.point(end, mid + amp), Qt.point(end, mid), Qt.point(gap, mid))
                             }
+                            return top.concat(bottom.reverse(), [top[0]])
+                        }
+                        ShapePath {
+                            strokeColor: "transparent"
+                            fillColor: "#5BE08A"
+                            PathPolyline { path: waveformShape.outline }
                         }
                     }
 
                     Text {
+                        objectName: "audioClipLabel" + audioClip.index
                         anchors.left: parent.left
-                        anchors.leftMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 16
+                        anchors.leftMargin: Math.max(8, 8 - audioClip.x)
+                        y: 2
+                        height: 16
+                        width: Math.max(0, parent.width - anchors.leftMargin - 8)
+                        verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideMiddle
                         text: audioBody.active && audioClip.laneShift !== 0
                               ? "A" + (audioClip.modelData.lane + audioClip.laneShift + 1)
                               : audioClip.modelData.name
                         color: Theme.text
                         font.family: Theme.fontUI
-                        font.pixelSize: Theme.sizeSmall
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Math.max(11, Theme.sizeSmall)
+                        font.weight: Font.Medium
+                        renderType: Text.NativeRendering
                     }
                 }
 
@@ -983,71 +1300,137 @@ Rectangle {
                                 : (audioBody.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
                 }
 
-                DragHandler {
+                MouseArea {
                     id: audioBody
-                    target: null
-                    enabled: panel.activeTool !== "razor"
-                    onActiveChanged: {
-                        panel.viewport.clipDragging = active
-                        panel.dropAudioLane = active ? audioClip.dropLaneIdx : -1
-                        if (active) return
-                        if (audioClip.laneShift !== 0)
-                            panel.viewport.setAudioClipLane(
-                                audioClip.index, audioClip.modelData.lane + audioClip.laneShift)
-                        panel.viewport.setAudioClipStart(
-                            audioClip.index,
-                            audioClip.modelData.start + audioClip.dragDx / panel.pxPerSec)
+                    anchors.fill: parent
+                    Connections {
+                        target: panel
+                        function onEditRevisionChanged() { if (audioBody.armed) audioBody.resetGesture() }
+                    }
+                    acceptedButtons: Qt.LeftButton
+                    preventStealing: true
+                    readonly property bool active: armed && moved
+                    property bool armed: false
+                    property bool moved: false
+                    property int originalIndex: -1
+                    property int pressRevision: 0
+                    property real originalStart: 0
+                    property real originalDuration: 0
+                    property real originalScale: 1
+                    property int originalLane: 0
+                    property point pressScene
+                    function resetGesture() {
+                        armed = false
+                        moved = false
                         audioClip.dragDx = 0; audioClip.dragDy = 0
+                        panel.dropAudioLane = -1
+                        panel.viewport.clipDragging = false
                     }
-                    onCentroidChanged: {
-                        if (!active) return
-                        const rawDx = centroid.scenePosition.x - centroid.scenePressPosition.x
-                        audioClip.dragDx = panel.snapPx(audioClip.modelData.start, rawDx, -1)
-                        audioClip.dragDy = centroid.scenePosition.y - centroid.scenePressPosition.y
+                    onPressed: (mouse) => {
+                        pressRevision = panel.editRevision
+                        originalIndex = audioClip.index
+                        panel.selectedAudioClip = audioClip.index
+                        originalStart = audioClip.modelData.start
+                        originalDuration = audioClip.spanSec
+                        originalScale = panel.pxPerSec
+                        originalLane = audioClip.modelData.lane
+                        pressScene = mapToItem(null, mouse.x, mouse.y)
+                        moved = false
+                        armed = panel.activeTool === "select"
                     }
-                }
-
-                TapHandler {
-                    onTapped: (pt) => {
-                        if (panel.activeTool === "razor") {
-                            const cutT = panel.timeAt(audioClip.x + pt.position.x)
-                            panel.viewport.splitAudioClip(audioClip.index, cutT)
+                    onPositionChanged: (mouse) => {
+                        if (!pressed || !armed) return
+                        const scene = mapToItem(null, mouse.x, mouse.y)
+                        const dx = scene.x - pressScene.x
+                        const dy = scene.y - pressScene.y
+                        if (!moved && Math.abs(dx) + Math.abs(dy) < 8) return
+                        moved = true
+                        audioClip.dragDx = panel.snapPx(originalStart,
+                            Math.max(-originalStart * originalScale, dx),
+                            originalIndex, originalDuration, true)
+                        audioClip.dragDy = dy
+                        panel.viewport.clipDragging = true
+                        panel.dropAudioLane = audioClip.dropLaneIdx
+                    }
+                    onReleased: (mouse) => {
+                        if (pressRevision !== panel.editRevision || (!armed && panel.activeTool !== "razor")) return
+                        const commit = armed && moved
+                        const idx = originalIndex
+                        const start = originalStart + audioClip.dragDx / originalScale
+                        const lane = audioClip.dropLaneIdx
+                        const cutTime = panel.timeAt(mapToItem(audioLaneArea, mouse.x, mouse.y).x)
+                        const changed = Math.abs(start - originalStart) > 0.000001 || lane !== originalLane
+                        // A model reset can destroy this delegate synchronously.
+                        resetGesture()
+                        if (commit && changed) panel.viewport.moveAudioClip(idx, start, lane)
+                        else if (!commit) {
+                            if (panel.activeTool === "razor") panel.viewport.splitAudioClip(idx, cutTime)
                         }
                     }
+                    onCanceled: resetGesture()
+                    Component.onDestruction: if (armed) resetGesture()
                 }
                 TapHandler {
                     acceptedButtons: Qt.RightButton
-                    onTapped: {
-                        panel.pendingRemoveAudio = audioClip.index
-                        removeConfirm.open()
-                    }
+                    onTapped: (point) => panel.openClipMenu(audioClip.index, true, audioClip, point.position)
                 }
 
                 ClipTrimHandle {
+                    revision: panel.editRevision
                     anchors.left: parent.left
                     height: parent.height
-                    onMoved: (dx) => audioClip.trimL = Math.min(dx, audioClip.width - 26)
+                    enabled: panel.activeTool === "select"
+                    property int originalIndex: -1
+                    property real originalIn: 0
+                    property real originalOut: 0
+                    property real originalScale: 1
+                    property real originalWidth: 0
+                    onStarted: {
+                        originalIndex = audioClip.index
+                        originalIn = audioClip.modelData.in
+                        originalOut = audioClip.modelData.out > originalIn
+                            ? audioClip.modelData.out : originalIn + audioClip.spanSec
+                        originalScale = panel.pxPerSec
+                        originalWidth = audioClip.width
+                    }
+                    onMoved: (dx) => audioClip.trimL = Math.min(dx, originalWidth - 26)
                     onDragged: (dx) => {
+                        const idx = originalIndex
+                        const value = Math.min(dx, originalWidth - 26) / originalScale
+                        const inTime = originalIn + value
+                        const outTime = originalOut
                         audioClip.trimL = 0
-                        panel.viewport.setAudioClipTrim(
-                            audioClip.index,
-                            audioClip.modelData.in + dx / panel.pxPerSec,
-                            audioClip.modelData.out)
+                        if (Math.abs(value) > 0.000001)
+                            panel.viewport.setAudioClipTrim(idx, inTime, outTime)
                     }
                 }
                 ClipTrimHandle {
+                    revision: panel.editRevision
                     anchors.right: parent.right
                     height: parent.height
-                    onMoved: (dx) => audioClip.trimR = Math.max(dx, 26 - audioClip.width)
+                    enabled: panel.activeTool === "select"
+                    property int originalIndex: -1
+                    property real originalIn: 0
+                    property real originalOut: 0
+                    property real originalScale: 1
+                    property real originalWidth: 0
+                    onStarted: {
+                        originalIndex = audioClip.index
+                        originalIn = audioClip.modelData.in
+                        originalOut = audioClip.modelData.out > originalIn
+                            ? audioClip.modelData.out : originalIn + audioClip.spanSec
+                        originalScale = panel.pxPerSec
+                        originalWidth = audioClip.width
+                    }
+                    onMoved: (dx) => audioClip.trimR = Math.max(dx, 26 - originalWidth)
                     onDragged: (dx) => {
+                        const idx = originalIndex
+                        const value = Math.max(dx, 26 - originalWidth) / originalScale
+                        const inTime = originalIn
+                        const outTime = originalOut + value
                         audioClip.trimR = 0
-                        const cur = audioClip.modelData.out > audioClip.modelData.in
-                                  ? audioClip.modelData.out
-                                  : audioClip.modelData.in + audioClip.spanSec
-                        panel.viewport.setAudioClipTrim(
-                            audioClip.index,
-                            audioClip.modelData.in,
-                            cur + dx / panel.pxPerSec)
+                        if (Math.abs(value) > 0.000001)
+                            panel.viewport.setAudioClipTrim(idx, inTime, outTime)
                     }
                 }
             }
@@ -1055,34 +1438,76 @@ Rectangle {
 
         // Playhead stem across audio lanes
         Rectangle {
-            width: 1
+            width: 2
             height: parent.height
-            color: Theme.text
+            color: "#FFFFFF"
             visible: x >= 0 && x <= parent.width
-            x: {
-                const d = panel.viewport.trackDuration
-                const t = d > 0 ? panel.viewport.playhead % d : panel.viewport.playhead
-                return panel.xOf(t)
-            }
+            z: 250
+            x: panel.xOf(panel.viewport.playhead)
         }
     }
     } // tracksContent
 
+    Item {
+        anchors.left: parent.left
+        anchors.leftMargin: Theme.padding + panel.headW
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.padding
+        height: parent.height
+        clip: true
+        z: 200
+        Rectangle {
+            visible: panel.hasRange
+            x: panel.rangeLeft
+            width: Math.max(0, panel.rangeRight - panel.rangeLeft)
+            height: parent.height
+            color: Qt.rgba(1, 1, 1, 0.07)
+        }
+        Repeater {
+            model: 2
+            delegate: Rectangle {
+                required property int index
+                x: panel.xOf(index === 0 ? panel.viewport.markIn : panel.viewport.markOut)
+                visible: index === 0 || panel.hasRange
+                width: 1; height: parent.height
+                color: Theme.textMuted
+            }
+        }
+    }
+
     // Vertical scroll indicator when tracks overflow
     Rectangle {
         id: vScrollTrack
+        objectName: "verticalScrollbar"
         visible: panel.maxTrackScrollY > 0
         anchors.right: parent.right
         anchors.rightMargin: 2
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        width: 4
-        radius: 2
+        width: 8
+        radius: 0
         color: Qt.rgba(1, 1, 1, 0.08)
 
+        MouseArea {
+            anchors.fill: parent
+            preventStealing: true
+            property real pressY: 0
+            property real pressScroll: 0
+            onPressed: (mouse) => {
+                pressY = mapToItem(null, mouse.x, mouse.y).y
+                pressScroll = panel.trackScrollY
+            }
+            onPositionChanged: (mouse) => {
+                if (!pressed) return
+                const dy = mapToItem(null, mouse.x, mouse.y).y - pressY
+                panel.trackScrollY = Math.max(0, Math.min(panel.maxTrackScrollY,
+                    pressScroll + dy / Math.max(1, height - verticalThumb.height) * panel.maxTrackScrollY))
+            }
+        }
         Rectangle {
+            id: verticalThumb
             width: parent.width
-            radius: 2
+            radius: 0
             color: Qt.rgba(1, 1, 1, 0.35)
             y: (panel.trackScrollY / Math.max(1, panel.maxTrackScrollY)) * (parent.height - height)
             height: Math.max(16, parent.height * (tracksViewport.height / Math.max(1, tracksContent.height)))
@@ -1093,14 +1518,15 @@ Rectangle {
     // ── Bottom Navigator Scrollbar (matches Figma 7_146.png & Premiere Pro style navigation) ──
     Rectangle {
         id: navScrollbar
+        objectName: "navScrollbar"
         anchors.left: parent.left
         anchors.leftMargin: Theme.padding + panel.headW
         anchors.right: parent.right
         anchors.rightMargin: Theme.padding
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 3
+        anchors.top: tracksViewport.bottom
+        anchors.topMargin: 3
         height: 10
-        radius: 5
+        radius: 0
         color: Theme.panel
 
         readonly property real viewFrac: Math.max(0.06, Math.min(1, panel.span / Math.max(1, panel.fullSpan)))
@@ -1117,12 +1543,13 @@ Rectangle {
 
         Rectangle {
             id: navThumb
-            x: Math.max(0, Math.min(parent.width - width, parent.width * navScrollbar.startFrac))
+            objectName: "navThumb"
+            x: (parent.width - width) * panel.viewStart / Math.max(0.0001, panel.fullSpan - panel.span)
             anchors.verticalCenter: parent.verticalCenter
-            width: Math.max(48, parent.width * navScrollbar.viewFrac)
+            width: Math.min(parent.width, Math.max(48, parent.width * navScrollbar.viewFrac))
             height: 8
-            radius: 4
-            color: thumbDrag.drag.active ? "#FFFFFF" : (thumbHover.hovered ? "#EEEEEE" : "#888888")
+            radius: 0
+            color: thumbDrag.pressed ? "#FFFFFF" : (thumbHover.hovered ? "#EEEEEE" : "#888888")
 
             HoverHandler { id: thumbHover; cursorShape: Qt.PointingHandCursor }
 
@@ -1130,22 +1557,26 @@ Rectangle {
             MouseArea {
                 id: thumbDrag
                 anchors.fill: parent
-                drag.target: navThumb
-                drag.axis: Drag.XAxis
-                drag.minimumX: 0
-                drag.maximumX: navScrollbar.width - navThumb.width
+                property real pressX: 0
+                property real pressView: 0
+                onPressed: (mouse) => {
+                    pressX = mapToItem(null, mouse.x, mouse.y).x
+                    pressView = panel.viewStart
+                }
                 cursorShape: Qt.PointingHandCursor
 
-                onPositionChanged: {
-                    if (drag.active && (navScrollbar.width - navThumb.width) > 0) {
-                        const frac = navThumb.x / (navScrollbar.width - navThumb.width)
-                        panel.viewStart = Math.max(0, Math.min(panel.fullSpan - panel.span, frac * (panel.fullSpan - panel.span)))
+                onPositionChanged: (mouse) => {
+                    if (pressed && (navScrollbar.width - navThumb.width) > 0) {
+                        panel.viewStart = pressView + (mapToItem(null, mouse.x, mouse.y).x - pressX)
+                            / (navScrollbar.width - navThumb.width) * (panel.fullSpan - panel.span)
+                        panel.clampView()
                     }
                 }
             }
 
             // Left zoom handle (Premiere Pro style resize edge)
             Item {
+                objectName: "navLeftHandle"
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
@@ -1159,16 +1590,16 @@ Rectangle {
                     property real pressView: 0
 
                     onPressed: (mouse) => {
-                        pressX = mouse.x
+                        pressX = mapToItem(null, mouse.x, mouse.y).x
                         pressSpan = panel.span
                         pressView = panel.viewStart
                     }
                     onPositionChanged: (mouse) => {
                         if (pressed) {
-                            const deltaSec = (mouse.x - pressX) / navScrollbar.width * panel.fullSpan
+                            const deltaSec = (mapToItem(null, mouse.x, mouse.y).x - pressX) / navScrollbar.width * panel.fullSpan
                             const newSpan = Math.max(1, Math.min(panel.fullSpan, pressSpan - deltaSec))
                             panel.zoom = Math.max(1, Math.min(60, panel.fullSpan / newSpan))
-                            panel.viewStart = Math.max(0, Math.min(panel.fullSpan - panel.span, pressView + deltaSec))
+                            panel.viewStart = pressView + pressSpan - panel.span
                             panel.clampView()
                         }
                     }
@@ -1177,6 +1608,7 @@ Rectangle {
 
             // Right zoom handle (Premiere Pro style resize edge)
             Item {
+                objectName: "navRightHandle"
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
@@ -1189,12 +1621,12 @@ Rectangle {
                     property real pressSpan: 0
 
                     onPressed: (mouse) => {
-                        pressX = mouse.x
+                        pressX = mapToItem(null, mouse.x, mouse.y).x
                         pressSpan = panel.span
                     }
                     onPositionChanged: (mouse) => {
                         if (pressed) {
-                            const deltaSec = (mouse.x - pressX) / navScrollbar.width * panel.fullSpan
+                            const deltaSec = (mapToItem(null, mouse.x, mouse.y).x - pressX) / navScrollbar.width * panel.fullSpan
                             const newSpan = Math.max(1, Math.min(panel.fullSpan, pressSpan + deltaSec))
                             panel.zoom = Math.max(1, Math.min(60, panel.fullSpan / newSpan))
                             panel.clampView()
@@ -1205,10 +1637,89 @@ Rectangle {
         }
     }
 
+    AppDialog {
+        id: sequenceSettings
+        objectName: "sequenceRangeDialog"
+        title: "Sequence range"
+        width: 360
+        property string error: ""
+        function applyRange() {
+            const start = panel.parseTime(rangeStart.text)
+            const end = panel.parseTime(rangeEnd.text)
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > 86400) {
+                error = "Enter a valid Start before End (maximum 24 hours)."
+                return
+            }
+            if (!panel.viewport.setSequenceRange(start, end)) {
+                error = "Range could not be applied."
+                return
+            }
+            close()
+        }
+        contentItem: Column {
+            spacing: 8
+            Text {
+                text: "Start / End (mm:ss or seconds)"
+                color: Theme.text
+                font.family: Theme.fontUI
+                font.pixelSize: Theme.sizeSmall
+            }
+            TextField {
+                id: rangeStart
+                objectName: "rangeStartField"
+                width: parent.width
+                placeholderText: "Start"
+                color: Theme.text
+                font.family: Theme.fontUI
+                onAccepted: sequenceSettings.applyRange()
+                background: Rectangle { color: Theme.raised; border.width: 1; border.color: Theme.border }
+            }
+            TextField {
+                id: rangeEnd
+                objectName: "rangeEndField"
+                width: parent.width
+                placeholderText: "End"
+                color: Theme.text
+                font.family: Theme.fontUI
+                onAccepted: sequenceSettings.applyRange()
+                background: Rectangle { color: Theme.raised; border.width: 1; border.color: Theme.border }
+            }
+            Text {
+                width: parent.width
+                text: sequenceSettings.error
+                visible: text.length > 0
+                wrapMode: Text.WordWrap
+                color: Theme.text
+                font.family: Theme.fontUI
+                font.pixelSize: 12
+            }
+            Row {
+                spacing: 8
+                FlatButton {
+                    objectName: "songEndButton"
+                    label: "Song end"
+                    enabled: panel.songEnd > 0 && panel.songEnd <= 86400
+                    onClicked: { rangeStart.text = "0"; rangeEnd.text = panel.formatTime(panel.songEnd) }
+                }
+                FlatButton {
+                    objectName: "entireTimelineButton"
+                    label: "Entire timeline"
+                    onClicked: if (panel.viewport.setSequenceRange(0, 0)) sequenceSettings.close()
+                }
+            }
+            Row {
+                spacing: 8
+                FlatButton { label: "Cancel"; onClicked: sequenceSettings.close() }
+                FlatButton { objectName: "applyRangeButton"; label: "Apply"; onClicked: sequenceSettings.applyRange() }
+            }
+        }
+    }
+
     // Deleting a clip is easy to do by accident with a right-click and there is
     // no undo prompt at the moment it happens, so it asks.
     AppDialog {
         id: removeConfirm
+        objectName: "removeClipDialog"
         title: "Remove clip"
         width: 340
         standardButtons: Dialog.Cancel | Dialog.Ok
@@ -1236,10 +1747,20 @@ Rectangle {
 
     Shortcut {
         sequence: "C"
+        enabled: panel.shortcutsEnabled
         onActivated: panel.activeTool = (panel.activeTool === "razor" ? "select" : "razor")
     }
     Shortcut {
         sequence: "Escape"
+        enabled: panel.shortcutsEnabled
         onActivated: panel.activeTool = "select"
     }
+    Shortcut { sequence: "V"; enabled: panel.shortcutsEnabled; onActivated: panel.activeTool = "select" }
+    Shortcut { sequence: "I"; enabled: panel.shortcutsEnabled; onActivated: panel.viewport.setMarkIn(panel.viewport.playhead) }
+    Shortcut { sequence: "O"; enabled: panel.shortcutsEnabled; onActivated: panel.viewport.setMarkOut(panel.viewport.playhead) }
+    Shortcut { sequence: "T"; enabled: panel.shortcutsEnabled; onActivated: textTool.clicked() }
+    Shortcut { sequence: "K"; enabled: panel.shortcutsEnabled && keyTool.enabled; onActivated: keyTool.clicked() }
+    Shortcut { sequence: "Ctrl+C"; enabled: panel.shortcutsEnabled && panel.selectedAudioClip < 0 && panel.targetClip >= 0; onActivated: panel.viewport.copyClip(panel.targetClip) }
+    Shortcut { sequence: "Ctrl+V"; enabled: panel.shortcutsEnabled && panel.viewport.hasClipboard; onActivated: panel.viewport.pasteClip(panel.viewport.playhead, -1) }
+    Shortcut { sequence: "Delete"; enabled: panel.shortcutsEnabled && (panel.selectedAudioClip >= 0 || panel.targetClip >= 0); onActivated: panel.requestRemove(panel.selectedAudioClip >= 0 ? panel.selectedAudioClip : panel.targetClip, panel.selectedAudioClip >= 0) }
 }

@@ -1,34 +1,31 @@
 import QtQuick
 import QtQuick.Controls
 
-// Figma-styled Base Dialog:
-// - 0px radius, dark brutalist surface (#0D0D0D)
-// - Minimal 1px border (#2A2A2A)
-// - Header with crisp typography and hairline separator
-// - Footer with styled buttons
+// Shared, screen-bounded dialog chrome. Long forms supply a ScrollView.
 Dialog {
     id: dlg
     modal: true
     anchors.centerIn: Overlay.overlay
-    padding: Theme.padding
-    topPadding: Theme.padding
-    bottomPadding: Theme.padding
+    popupType: Popup.Item
+    padding: Theme.groupGap
+    height: Math.min(implicitHeight, Overlay.overlay ? Overlay.overlay.height - Theme.groupGap * 2 : implicitHeight)
+    font.family: Theme.fontUI
+    font.pixelSize: Theme.size
 
     background: Rectangle {
-        color: "#111111"
-        radius: Theme.radius
+        color: Theme.flyout
+        radius: Theme.panelRadius
         border.width: 1
-        border.color: "#2E2E2E"
+        border.color: Theme.popupBorder
     }
 
     header: Item {
         visible: dlg.title !== ""
-        implicitHeight: dlg.title !== "" ? 42 : 0
+        implicitHeight: dlg.title !== "" ? Theme.header + Theme.gap : 0
 
         Rectangle {
             anchors.fill: parent
-            color: "#0D0D0D"
-            radius: Theme.radius
+            color: "transparent"
 
             Rectangle {
                 anchors.left: parent.left
@@ -41,42 +38,47 @@ Dialog {
 
         Text {
             anchors.left: parent.left
-            anchors.leftMargin: Theme.padding
+            anchors.leftMargin: Theme.groupGap
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.groupGap
             anchors.verticalCenter: parent.verticalCenter
-            text: dlg.title.toLowerCase()
-            color: "#FFFFFF"
+            text: dlg.title
+            color: Theme.text
+            elide: Text.ElideRight
             font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeTitle
-            font.weight: Font.SemiBold
+            font.pixelSize: Math.max(12, Theme.sizeTitle)
+            font.weight: Font.DemiBold
         }
     }
 
     footer: DialogButtonBox {
         visible: dlg.standardButtons !== 0
-        implicitHeight: dlg.standardButtons !== 0 ? 46 : 0
-        padding: Theme.padding
+        implicitHeight: dlg.standardButtons !== 0 ? Theme.control + Theme.groupGap * 2 : 0
+        padding: Theme.groupGap
+        spacing: Theme.gap
         alignment: Qt.AlignRight
         background: Rectangle { color: "transparent" }
 
         delegate: Button {
             id: btn
-            implicitHeight: 28
-            leftPadding: 16
-            rightPadding: 16
+            implicitHeight: Theme.control
+            implicitWidth: Math.max(96, implicitContentWidth + leftPadding + rightPadding)
+            leftPadding: Theme.groupGap
+            rightPadding: Theme.groupGap
             contentItem: Text {
                 text: btn.text
-                color: btn.hovered ? "#FFFFFF" : "#CCCCCC"
+                color: btn.enabled ? Theme.text : Theme.textDisabled
                 font.family: Theme.fontUI
-                font.pixelSize: Theme.sizeSmall
-                font.weight: Font.SemiBold
+                font.pixelSize: Theme.size
+                font.weight: Font.DemiBold
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
             background: Rectangle {
-                color: btn.down ? "#000000" : (btn.hovered ? "#333333" : "#222222")
+                color: btn.down ? Theme.sunken : (btn.hovered ? Theme.hover : Theme.raised)
                 radius: Theme.radius
-                border.width: 1
-                border.color: btn.hovered ? "#444444" : "#2A2A2A"
+                border.width: btn.visualFocus ? Theme.focusWidth : 1
+                border.color: btn.visualFocus ? Theme.focusRing : Theme.popupBorder
             }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
         }

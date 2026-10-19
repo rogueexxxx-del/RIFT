@@ -18,6 +18,14 @@ Item {
     property bool patched: false
     property string channelName: ""
     property color tint: Theme.channelColor(channelName)
+    readonly property color channelInk: {
+        const lighten = Theme.luminance(Theme.panel) < 0.5
+        for (let factor = 1; factor <= 4; factor += 0.1) {
+            const ink = lighten ? Qt.lighter(ctl.tint, factor) : Qt.darker(ctl.tint, factor)
+            if (Theme.contrastRatio(ink, Theme.panel) >= 4.5) return ink
+        }
+        return Theme.foregroundFor(Theme.panel)
+    }
     property bool keyed: false
     property var availableChannels: []
 
@@ -25,7 +33,28 @@ Item {
     signal linkRequested(int channelIndex)
     signal labelClicked()
 
-    implicitHeight: 44
+    readonly property bool stackedHeader: width < nameText.implicitWidth + readouts.implicitWidth + Theme.gap
+    implicitHeight: headerRow.height + 24
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Slider
+    Accessible.name: titleCase(label)
+    Accessible.description: shown.toFixed(2) + (patched ? ", linked to " + channelName : "")
+    Accessible.onIncreaseAction: adjust(1)
+    Accessible.onDecreaseAction: adjust(-1)
+    Keys.onRightPressed: adjust(1)
+    Keys.onUpPressed: adjust(1)
+    Keys.onLeftPressed: adjust(-1)
+    Keys.onDownPressed: adjust(-1)
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_Home) { commit(from); event.accepted = true }
+        else if (event.key === Qt.Key_End) { commit(to); event.accepted = true }
+    }
+    Keys.onReturnPressed: labelClicked()
+
+    function commit(v) { shown = snap(v); moved(shown) }
+    function adjust(direction) {
+        commit(shown + direction * (stepSize > 0 ? stepSize : (to - from) / 100))
+    }
 
     function snap(v) {
         const clamped = Math.max(ctl.from, Math.min(ctl.to, v))
@@ -54,17 +83,23 @@ Item {
     // ── Header Row: Label on left, Channel + LINK on right ──
     Item {
         id: headerRow
+        objectName: "parameterHeader"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        height: 18
+        height: ctl.stackedHeader ? nameText.implicitHeight + 2 + Theme.control : Theme.control
 
         Text {
             id: nameText
+            objectName: "parameterName"
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: ctl.stackedHeader ? parent.right : readouts.left
+            anchors.rightMargin: ctl.stackedHeader ? 0 : Theme.gap
+            anchors.top: parent.top
+            anchors.topMargin: ctl.stackedHeader ? 0 : (parent.height - implicitHeight) / 2
+            elide: Text.ElideRight
             text: ctl.titleCase(ctl.label) + (ctl.keyed ? " ◆" : "")
-            color: ctl.patched ? ctl.tint : (nameHover.hovered ? Theme.accent : Theme.text)
+            color: ctl.patched ? Theme.readableText(ctl.tint, Theme.panel) : (nameHover.hovered ? Theme.accentText : Theme.text)
             font.family: Theme.fontUI
             font.pixelSize: Theme.size
             font.weight: Font.Normal
@@ -74,9 +109,11 @@ Item {
         }
 
         Row {
+            id: readouts
+            objectName: "parameterReadouts"
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 10
+            anchors.bottom: parent.bottom
+            spacing: Theme.gapTight
 
             // Value readout
             Text {
@@ -89,10 +126,13 @@ Item {
 
             // Patched channel text indicator
             Text {
+                objectName: "parameterChannelName"
                 visible: ctl.patched && ctl.channelName !== ""
                 anchors.verticalCenter: parent.verticalCenter
                 text: ctl.channelName.toLowerCase()
-                color: ctl.tint
+                color: ctl.channelInk
+                width: Math.min(implicitWidth, 80, ctl.width * 0.2)
+                elide: Text.ElideRight
                 font.family: Theme.fontUI
                 font.pixelSize: Theme.sizeTiny
                 font.weight: Font.Bold
@@ -102,26 +142,31 @@ Item {
             // LINK Button
             Rectangle {
                 id: linkBtn
+                objectName: "parameterAudioLink"
                 anchors.verticalCenter: parent.verticalCenter
-                width: ctl.patched ? 50 : 38
-                height: 18
-                radius: 3
-                color: ctl.patched ? ctl.tint : (linkHover.hovered ? "#333333" : "#1A1A1A")
-                border.width: 1
-                border.color: ctl.patched ? ctl.tint : (linkHover.hovered ? "#555555" : "#303030")
+                width: ctl.patched ? 64 : 48
+                height: Theme.control
+                radius: Theme.radius
+                color: ctl.patched ? ctl.tint : (linkHover.hovered ? Theme.hover : Theme.raised)
+                border.width: activeFocus ? Theme.focusWidth : 1
+                border.color: activeFocus ? Theme.focusRing : (ctl.patched ? ctl.tint : Theme.border)
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: "Link " + ctl.label + " to audio channel"
+                Accessible.onPressAction: linkMenu.open()
+                Keys.onSpacePressed: linkMenu.open()
+                Keys.onReturnPressed: linkMenu.open()
 
                 readonly property color linkTextColor: {
-                    if (!ctl.patched) return linkHover.hovered ? "#FFFFFF" : "#888888"
-                    const lum = 0.299 * ctl.tint.r + 0.587 * ctl.tint.g + 0.114 * ctl.tint.b
-                    return lum > 0.45 ? "#000000" : "#FFFFFF"
+                    return ctl.patched ? Theme.foregroundFor(ctl.tint) : Theme.text
                 }
 
                 Text {
                     anchors.centerIn: parent
-                    text: ctl.patched ? "LINKED" : "LINK"
+                    text: ctl.patched ? "Linked" : "Link"
                     color: linkBtn.linkTextColor
                     font.family: Theme.fontUI
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.sizeTiny
                     font.weight: Font.Bold
                     font.letterSpacing: 0.5
                 }
@@ -137,19 +182,19 @@ Item {
                     }
                 }
 
-                Menu {
+                StyledMenu {
                     id: linkMenu
                     y: linkBtn.height + 2
                     x: linkBtn.width - width
 
-                    MenuItem {
+                    StyledMenuItem {
                         text: "None (Unlink)"
                         onTriggered: ctl.linkRequested(-1)
                     }
-                    MenuSeparator {}
+                    StyledMenuSeparator {}
                     Repeater {
                         model: ctl.availableChannels
-                        MenuItem {
+                        StyledMenuItem {
                             required property int index
                             required property var modelData
                             text: (modelData.name || modelData).toString().toLowerCase()
@@ -164,15 +209,16 @@ Item {
     // ── Track Bar: machined track with subtle highlight ──
     Rectangle {
         id: track
+        objectName: "parameterTrack"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         height: 12
-        radius: 3
-        color: "#161616"
-        border.width: 1
-        border.color: hover.hovered ? "#383838" : "#262626"
+        radius: Theme.radius
+        color: Theme.sunken
+        border.width: ctl.activeFocus ? Theme.focusWidth : 1
+        border.color: ctl.activeFocus ? Theme.focusRing : (hover.hovered ? Theme.borderHover : Theme.border)
 
         Rectangle {
             id: fill
@@ -180,7 +226,7 @@ Item {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: Math.max(0, parent.width * ctl.fraction())
-            radius: 3
+            radius: 0
             color: ctl.patched ? ctl.tint : "#E0E0E0"
 
             // Machined end-cap highlight
@@ -190,7 +236,7 @@ Item {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: 2
-                radius: 1
+                radius: 0
                 color: "#FFFFFF"
                 opacity: 0.85
             }
@@ -200,11 +246,11 @@ Item {
         Item {
             anchors.fill: parent
             anchors.topMargin: -6
-            anchors.bottomMargin: -6
+            anchors.bottomMargin: -10
 
             HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
             TapHandler {
-                onTapped: (pt) => ctl.apply(pt.position.x)
+                onTapped: (pt) => { ctl.forceActiveFocus(); ctl.apply(pt.position.x) }
             }
             DragHandler {
                 id: drag

@@ -1,4 +1,4 @@
-# `.rift` Project Format Contract  (v5)
+# `.rift` Project Format Contract  (v6)
 
 Full session state. Superset of the prototype `.rift` (core/project.py v1) -
 adds a node-graph representation while staying backward compatible with the
@@ -14,13 +14,19 @@ over whatever footage is already loaded.
 
 **v5 adds** `audio_clips` (timeline audio tracks + real-time mixing) and `link` on clips.
 
-## v5 top level
+**v6 removes** the project-level effect chain and adds optional
+`sequenceDuration` in seconds. Effects belong to individual clips. Older
+project-level effects are discarded on load. Presets still store their effect
+chain at the top level and apply it to the selected clip.
+
+## v6 top level
 ```json
 {
   "format": "rift-project",
-  "version": 5,
+  "version": 6,
   "name": "my-visual",
   "aspect": 0,                        // 0: 16:9, 1: 1:1, 2: 4:3, 3: 9:16, 4: 21:9
+  "sequenceDuration": 120.0,          // optional; 0 or absent = automatic
 
   "analysis_path": "cached.analysis", // optional precomputed blob for single-clip mix
 
@@ -30,9 +36,6 @@ over whatever footage is already loaded.
     { "key": "/rift/x",  "node": 0, "param": 0 }
   ],
   "markers": [ 0.51, 1.02, 1.51 ],    // v4: beat times, seconds
-  "chain": [                          // shared chain, applied to un-stacked clips
-    { "shader": "ascii", "params": [ <param>, ... ], "blend": 4, "mix": 0.5 }
-  ],
   "clips": [                          // omit entirely for a preset
     {
       "path": "clip.mp4",
@@ -57,6 +60,9 @@ over whatever footage is already loaded.
 `start: -1` means "append after the previous clip in this lane" - the timeline
 resolves it once the source opens, so a saved project keeps that intent instead
 of freezing a position computed from a not-yet-known duration.
+
+When `sequenceDuration` is set, the timeline and export end at that time.
+Clips do not repeat past their end; gaps after clips render black.
 
 A chain entry's `blend`/`mix` decide how that effect's OUTPUT folds back over
 its own INPUT - distinct from a clip's `blend`/`opacity`, which decide how a
@@ -132,14 +138,16 @@ overridden by stale copies.
 3. else report missing → UI prompts re-import
 
 ## Backward compatibility
-- v1 `.rift` (linear `chain` list + `effects` + `post_fx`) loads: a migrator
-  synthesizes a linear `graph` (source→generator→chain...→output).
-- v2 `.rift` loads: `graph.nodes` of type `effect` become the shared `chain`,
-  `media_path` becomes a single clip, and the grade comes up neutral.
+- v1 `.rift` loads: old project-level effects are discarded.
+- v2 `.rift` loads: `media_path` becomes a single clip; old project-level
+  effects are discarded, and the grade comes up neutral.
 - v3 loads unchanged; `controls` is simply absent, meaning nothing is mapped.
 - v4 loads: `audio_path` is migrated to one `audio_clips` entry on lane 0 (A1).
   If `analysis_path` exists, single-clip blob reactivity is preserved.
-- v5 introduces `audio_clips` and clip `link`. Saving always writes v5.
+- v5 introduces `audio_clips` and clip `link`.
+- v6 stores effects only on clips in projects. Old project-level effects are
+  discarded. Preset chains apply to the selected clip. An optional fixed
+  sequence duration controls preview and export length. Saving writes v6.
 - Loader migrates in memory; save always writes current version.
 
 ## Versioning

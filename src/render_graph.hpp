@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <utility>
 #include "parameter_graph.hpp"
 #include "rhi_context.hpp"
 #include "engine_ubo.hpp"
@@ -60,6 +61,7 @@ public:
     // so the id handed to the display never changes - Qt Quick rebuilds its
     // QSGTexture wrapper whenever it does, which is not survivable per frame.
     TexId ensureOutput(RhiContext& rhi, int w, int h);
+    std::pair<float, float> scopeTriggerSettings() const;
 
 private:
     std::vector<Node>     nodes_;

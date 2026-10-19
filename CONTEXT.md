@@ -73,12 +73,12 @@ Direct3D 11), QML/Qt Quick for the interface.**
 | Effects | `src/render_graph.{hpp,cpp}` | The shared effect chain: a list of shader ids, each with its own uniforms, run one into the next through ping-pong targets. |
 | Layers | `src/layer_stack.{hpp,cpp}` | Per-clip chains, lane compositing (blend / opacity / transform / crop), and the master colour grade. |
 | Timeline | `src/timeline.{hpp,cpp}` | Clips: where they sit, what they trim to, which lane, their own effect stack. `activeAt(t)` returns what is on screen. |
-| Media | `src/media_decoder.{hpp,cpp}` | FFmpeg decode of video/image/vector into GPU textures. |
+| Media | `src/media_decoder.{hpp,cpp}`, `src/frame_queue.hpp` | FFmpeg decode and bounded handoff of decoded frames to the renderer. |
 | Text | `src/text_source.{hpp,cpp}` | Rasterises text layers (own font registry, separate from Qt's). |
 | Audio | `src/audio_system.{hpp,cpp}` | Decode, playback, live capture, FFT, band splitting into 10 channels. |
 | Params | `src/parameter_graph.hpp`, `src/smoother.hpp` | A uniform's value = base + keyframes + audio patch + MIDI, smoothed. |
 | Engine | `src/engine.{hpp,cpp}` | The conductor. Owns the render thread, the playhead, and the export loop. |
-| Export | `src/exporter.{hpp,cpp}`, `src/frame_queue.hpp` | GPU readback -> encoder, on its own thread. |
+| Export | `src/exporter.{hpp,cpp}`, `src/engine.cpp` | GPU readback, FFmpeg encode/mux, and the serial export loop. The encoder-thread experiment was removed for 1.0.5; see sections 20 and 21. |
 | UI glue | `src/ui/rift_viewport.{hpp,cpp}` | The single `QQuickItem` the whole QML interface talks to. Big on purpose - it is the entire C++/QML boundary. |
 | Input | `src/ui/control_input.{hpp,cpp}` | MIDI CC in, OSC over UDP. |
 | Shell | `src/ui/main_qml.cpp`, `qml/` | The application itself. |
@@ -124,8 +124,8 @@ Direct3D 11), QML/Qt Quick for the interface.**
   zero-fills params a saved file does not carry.
 - **A QRhi offscreen frame is a submit plus a wait for the GPU to drain.**
   Opening one per effect pass costs a full stall each. `beginFrame`/`endFrame`
-  are nestable through a depth counter so a whole frame - every chain pass, the
-  composite, the grade, the readback - is one submit.
+  are nestable through a depth counter so the chain passes, composite, and
+  grade share one submit. Readback runs after that frame completes.
 - **The texture id handed to Qt Quick must be stable.** If the id changes every
   frame, the `QSGTexture` wrapper is destroyed and rebuilt every frame, which
   crashed. The final pass always renders into a fixed target for this reason.
@@ -782,3 +782,117 @@ Swept and removed 877+ lines of dead C API stubs, obsolete offline tools, and re
   - Standalone Inno Setup Windows installer (`RIFT-1.0.0-setup.exe`, 75.5 MB) and portable standalone archive (`RIFT-1.0.0-portable.zip`, 117.4 MB) compiled, published to GitHub Release v1.0.0, and branches `main` & `dev` kept in sync.
 
 
+---
+
+## 20. Historical audit and release status (17 October 2026)
+
+The user wants a subsystem-by-subsystem audit before the next public release:
+export/render engine, audio linking and reactivity, interface workflows, then
+packaged runtime and installer. Finish and report each phase before moving to
+the next. The reported failure was a 4 minute 21 second song exported at 1440p
+with ASCII and Split effects in about three hours. That project was not saved,
+so its exact settings and output cannot be reproduced.
+
+The version at the start of this audit was 1.0.4. See section 21 for 1.0.5.
+The 1.0.0 release history above is historical; it does not validate the current
+working tree or a new installer. Several engine, benchmark, and UI files have
+uncommitted changes. Verify the exact checkout and packaged application before
+calling any result release ready.
+
+### Export investigation so far
+
+- `tools/bench.ps1` now passes the requested output width and height to the
+  application and checks the encoded dimensions and frame count with ffprobe.
+  `RIFT_EXPORT_PROFILE=1` reports render, media, readback, and encode time.
+- A 10 second, 2560 x 1440, 60 fps export with ASCII, Prism Split, and audio
+  completed in about 56 seconds on the serial export path: 600 video frames,
+  10 seconds of audio, clean process exit. A synthetic 4 minute 21 second audio
+  export at 640 x 360 completed in about 92 seconds with 15,660 frames. Neither
+  run reproduces the user's full 1440p project.
+- In a 1440p no-effects profile, per-frame averages were 29.21 ms render
+  (23.47 ms media), 15.41 ms readback, and 21.92 ms encode. These are measured
+  costs from that run, not a general performance guarantee.
+- An export shutdown crash involving the playback audio device was fixed in the
+  current work; the focused audio export exited cleanly. Readback failure now
+  fails export instead of silently omitting a frame.
+- `DecodedFrame::rgba` now shares its buffer across queue reads. Serial
+  10 second exports before and after that change were pixel-identical
+  (`PSNR average:inf`), but elapsed times varied, so no speedup is established.
+- A separate, uncommitted encoder-thread experiment finished the same 10 second
+  1440p case in about 43 seconds. Its output diverged from the serial reference
+  starting at frame 48 (`PSNR average:27.50`). Correct frame count and duration
+  do not make that output acceptable. The threaded path is experimental and
+  must be fixed or reverted before release. Investigate decoder EOF and frame
+  queue handoff, then repeat a frame-by-frame comparison on identical inputs.
+
+Focused `export`, `export_hybrid`, and real-media `media_decode` checks passed
+earlier in the investigation. `export_hybrid` exercises `Exporter` directly;
+it does not prove the current `Engine` encoder-thread path. A full-length 1440p
+run and packaged UI acceptance have not been completed. A new installer should
+follow those checks, not precede them. This was the audit's status at that time;
+the encoder-thread experiment has since been removed, as described below.
+
+## 21. Release 1.0.5 (19 October 2026)
+
+This release includes the accumulated app changes since the last published
+1.0.0 release. CMake, About, and the Inno Setup installer declare 1.0.5.
+
+### Workspace and editing
+
+- Persistent split, tabbed, and floating panels live in `DockLayout.js`,
+  `DockGroup.qml`, and `DockWorkspace.qml`. Preview stays in its original native
+  window because its QRhi resources cannot safely move across windows.
+- Atomic video/audio clip moves and sequence-range edits have undo/redo support.
+  Timeline actions respect typing focus, with pointer-time Razor actions,
+  context menus, snapping, range controls, and horizontal toolbar overflow.
+- Audio tracks use cached source-local waveforms. Monitor/export gain behavior
+  is not changed by the interface work.
+
+### Interface
+
+- Native FluentWinUI3 controls, shared theme/contrast helpers, Windows fonts,
+  keyboard focus, accessible names, and responsive React/Live layouts.
+- Plain panel tabs with accent underlines, hamburger menus, thin split seams,
+  working panel hiding, compact menus, and less space around linked readouts.
+- FX patterns blend into each row in its effect color, with short descriptions.
+  Channel names retain their channel hue with a readable text tone.
+- Supplied icon references in `assets/icons inspo` are used for matching tools.
+  Tool glyphs are 18 logical pixels and panel menus 16 pixels; hit areas remain
+  unchanged. `AssetIcon.qml` retains a 48-pixel backing canvas and uses smooth,
+  antialiased, mipmapped downsampling instead of a small enlarged bitmap.
+- Preview uses theme-matched editor surroundings without cropping the media.
+
+### Export and packaging
+
+- Removed the encoder-thread experiment after its earlier frame-parity failure.
+  Render, readback, and frame writing are serial again. Readback, encoding, and
+  finalization failures still fail the export. Profiling remains available.
+- Install rules ship only current engine QSB files, layouts, and manifests,
+  rather than copying obsolete shader metadata from an incremental build.
+- `packaging/build_release.ps1 -Zip -Installer` stages `dist-1.0.5`, creates
+  `RIFT-1.0.5-windows-x64.zip`, and compiles
+  `dist-installer/RIFT-1.0.5-setup.exe`. It refuses to overwrite a running build
+  executable instead of killing unrelated RIFT sessions.
+
+### Verification and remaining limits
+
+- 124 Fluent QML checks passed, including real SVG/PNG decoding and icon tint
+  alpha checks. Nine icon checks also passed at each forced scale, 150% and 200%.
+- Release build and all eight native CTest cases passed. The docking model
+  passed 351 checks.
+- `tests/run_export_repeatability.py` verified two packaged 320 x 180 exports
+  with moving media and five seconds of audio. All 299 decoded frames matched;
+  CLI export truncates duration to whole frames, so the endpoint can differ by
+  one 60 fps frame.
+- Cleared-environment staged export, bundled MSVC runtime, dependency closure,
+  current shader metadata, icon hashes, portable archive CRCs, and executable
+  hashes passed. Inno Setup compiled an installer with product version 1.0.5.
+  The installer was not run over an existing installation.
+- The user's unsaved 4 minute 21 second 1440p project cannot be reproduced.
+  Serial encoding is a correctness rollback, not a new performance guarantee.
+- The reported physical-output volume fluctuation is still unisolated. Earlier
+  deterministic PCM checks passed, but mixed-output Realtek captures varied.
+- Audio clipboard copy/paste and an accurate unsaved-project marker remain
+  unsupported. MIDI hardware and mixed-monitor scaling are not newly verified.
+- Final visual acceptance belongs to the user. No live project was used for
+  release testing; temporary review captures and build files stay out of Git.

@@ -5,16 +5,27 @@ import QtQuick.Layouts
 AppDialog {
     id: dlg
     title: ""
-    width: 480
+    width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - Theme.groupGap * 2 : 420)
     standardButtons: Dialog.Close
 
-    contentItem: ColumnLayout {
-        spacing: 14
+    contentItem: ScrollView {
+        id: formScroll
+        clip: true
+        implicitHeight: form.implicitHeight
+        contentWidth: availableWidth
+        contentHeight: form.implicitHeight
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
-        // Official RIFT Wordmark Logo
+        ColumnLayout {
+        id: form
+        width: formScroll.availableWidth - Theme.groupGap
+        spacing: Theme.groupGap
+
         Item {
-            Layout.preferredWidth: 140
-            Layout.preferredHeight: 36
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 180
+            Layout.preferredHeight: 64
 
             Image {
                 id: logoImg
@@ -22,22 +33,25 @@ AppDialog {
                 source: Theme.logo
                 fillMode: Image.PreserveAspectFit
                 smooth: true
+                mipmap: true
             }
 
             Text {
                 visible: logoImg.status !== Image.Ready
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.centerIn: parent
                 text: "RIFT"
-                color: "#FFFFFF"
+                color: Theme.text
                 font.family: Theme.fontUI
-                font.pixelSize: 26
-                font.weight: Font.Bold
+                font.pixelSize: Theme.sizeBig
+                font.weight: Font.DemiBold
                 font.letterSpacing: 2.0
             }
         }
 
         Text {
-            text: "Sound into picture"
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: "Sound into picture."
             color: Theme.textDim
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeTitle
@@ -46,31 +60,9 @@ AppDialog {
         Text {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            lineHeight: 1.4
-            text: "Every tool for this is either a toy or a second job. The "
-                + "simple ones make one look and stop. The serious ones expect "
-                + "you to already know what a feedback buffer is."
+            horizontalAlignment: Text.AlignHCenter
+            text: "Edit clips, shape them with effects, and create visuals that move with your audio."
             color: Theme.text
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.size
-        }
-        Text {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            lineHeight: 1.4
-            text: "RIFT is the middle. Nothing hidden behind jargon, nothing "
-                + "dumbed down, and you should get somewhere good on the first "
-                + "evening - without giving up the ceiling later."
-            color: Theme.text
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.size
-        }
-        Text {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            lineHeight: 1.4
-            text: "Made because the thing I wanted to use did not exist."
-            color: Theme.textDim
             font.family: Theme.fontUI
             font.pixelSize: Theme.size
         }
@@ -91,29 +83,13 @@ AppDialog {
             }
             Item { Layout.fillWidth: true }
             Text {
-                text: "v1.0.0"
+                text: "v1.0.5"
                 color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.sizeSmall
             }
         }
 
-        Text {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            text: "Designed by a human, written with AI."
-            color: Theme.textDim
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeSmall
-        }
-        Text {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            text: "Qt RHI (Direct3D 11) · FFmpeg · miniaudio · pffft"
-            color: Theme.textMuted
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeTiny
-        }
         // The logo typeface is free to use on the condition that its author is
         // credited. This line is that credit - do not drop it.
         Text {
@@ -123,7 +99,8 @@ AppDialog {
                 + "SUVA Type Foundry. Full notices in THIRD-PARTY-NOTICES.md."
             color: Theme.textMuted
             font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeTiny
+            font.pixelSize: Math.max(12, Theme.size)
+        }
         }
     }
 }

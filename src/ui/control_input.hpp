@@ -1,7 +1,7 @@
 // ControlInput - external controllers: MIDI CC in, and OSC over UDP.
 //
 // Both sources normalise to the same thing: a string key identifying the
-// control ("cc:74", "/rift/blur") plus a 0..1 value. Everything downstream
+// control ("cc:74", "/rift/flow_warp") plus a 0..1 value. Everything downstream
 // (learn mode, the mapping table) works on that pair, so adding a source later
 // means emitting the same signal.
 //

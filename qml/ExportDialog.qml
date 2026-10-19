@@ -11,7 +11,7 @@ AppDialog {
     required property var viewport
 
     title: "Export video"
-    width: 380
+    width: Math.min(560, Overlay.overlay ? Overlay.overlay.width - Theme.groupGap * 2 : 560)
     standardButtons: Dialog.Cancel
 
     // Defaults to the shape the project was started in, so an export does not
@@ -74,7 +74,19 @@ AppDialog {
         }
     }
 
-    contentItem: ColumnLayout {
+    contentItem: ScrollView {
+        id: formScroll
+        objectName: "exportScroll"
+        clip: true
+        implicitHeight: form.implicitHeight
+        contentWidth: availableWidth
+        contentHeight: form.implicitHeight
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+
+        ColumnLayout {
+        id: form
+        width: formScroll.availableWidth - Theme.groupGap
         spacing: Theme.gap
 
         Text {
@@ -123,7 +135,7 @@ AppDialog {
         Text {
             text: dlg.outW + " x " + dlg.outH + "  ·  "
                   + dlg.fpsList[dlg.fpsIdx] + " fps"
-            color: Theme.accent
+            color: Theme.accentText
             font.family: Theme.fontMono
             font.pixelSize: Theme.size
         }
@@ -192,6 +204,7 @@ AppDialog {
             label: "Choose file and export"
             active: true
             onClicked: fileDialog.open()
+        }
         }
     }
 }

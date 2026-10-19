@@ -11,6 +11,14 @@ Item {
     signal moved(real dx)
     // On release. The clip commits the trim.
     signal dragged(real dx)
+    signal started()
+    property int revision: 0
+    onRevisionChanged: cancelGesture()
+    function cancelGesture() {
+        drag.armed = false
+        drag.dx = 0
+        h.moved(0)
+    }
 
     readonly property bool active: drag.active
 
@@ -46,28 +54,36 @@ Item {
         id: hover
         cursorShape: Qt.SizeHorCursor
     }
-    DragHandler {
+    MouseArea {
         id: drag
-        target: null
-        xAxis.enabled: true
-        yAxis.enabled: false
-        // Beat the clip body's own drag handler to the grab. Without this a
-        // trim that starts a few pixels in turns into a move.
-        grabPermissions: PointerHandler.CanTakeOverFromAnything
+        anchors.fill: parent
+        preventStealing: true
+        readonly property bool active: armed && Math.abs(dx) >= 1
+        property bool armed: false
         property real dx: 0
-        onCentroidChanged: {
-            if (!active) return
-            // scenePosition, NOT position. This handle is anchored to the clip
-            // edge it is dragging, so the moment the clip resizes the handle
-            // moves too - and a delta measured against the handle's own
-            // origin then subtracts its own effect. The edge crawled along at
-            // a fraction of the pointer's speed and never caught up.
-            dx = centroid.scenePosition.x - centroid.scenePressPosition.x
+        property real pressX: 0
+        onPressed: (mouse) => {
+            dx = 0
+            pressX = mapToItem(null, mouse.x, mouse.y).x
+            armed = true
+            h.started()
+        }
+        onPositionChanged: (mouse) => {
+            if (!pressed || !armed) return
+            // The moving edge is not a stable coordinate frame.
+            dx = mapToItem(null, mouse.x, mouse.y).x - pressX
             h.moved(dx)
         }
-        onActiveChanged: {
-            if (active) return
-            h.dragged(dx)
+        onReleased: {
+            const commit = armed && Math.abs(dx) > 0.000001
+            const finalDx = dx
+            armed = false
+            dx = 0
+            h.moved(0)
+            if (commit) h.dragged(finalDx)
+        }
+        onCanceled: {
+            armed = false
             dx = 0
             h.moved(0)
         }

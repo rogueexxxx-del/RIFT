@@ -39,7 +39,7 @@ if (-not (Test-Path $aud)) {
 }
 
 if ($Effects.Count -eq 0) {
-    $Effects = @("oscilloscope", "tunnel", "kaleido", "feedback", "ascii", "glitch", "blur", "dither")
+    $Effects = @("oscilloscope", "tunnel", "kaleido", "feedback", "ascii", "glitch", "dither")
 }
 
 Write-Host "Running 3s export repro across effects using: $exe"

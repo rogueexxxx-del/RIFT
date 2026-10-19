@@ -3,7 +3,7 @@
   "name": "DITHER",
   "version": 1,
   "frag": "dither.frag",
-  "category": "generator",
+  "category": "texture",
   "uniforms": [
     {
       "name": "levels",
@@ -18,8 +18,8 @@
         "channel": "melody",
         "depth": 8.0,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -58,8 +58,8 @@
         "channel": "bass",
         "depth": 0.3,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false

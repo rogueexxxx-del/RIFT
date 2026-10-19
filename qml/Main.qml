@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.FluentWinUI3 as Fluent
 import QtCore
 import QtQuick.Layouts
 import Rift
@@ -11,12 +12,29 @@ ApplicationWindow {
     visible: true
     visibility: Window.Maximized
     width: 1440; height: 830
-    minimumWidth: 1180; minimumHeight: 700
+    minimumWidth: 800; minimumHeight: 480
     // The project name belongs in the window title, where Windows shows it in
     // the task bar and Alt-Tab. Repeating it inside the app was spending a row
     // of the UI on something the OS already displays.
     title: viewport.projectName + " - RIFT"
     color: Theme.bg
+    font.family: Theme.fontUI
+    font.pixelSize: Theme.size
+    palette.window: Theme.bg
+    palette.windowText: Theme.text
+    palette.base: Theme.sunken
+    palette.alternateBase: Theme.panel
+    palette.text: Theme.text
+    palette.button: Theme.raised
+    palette.buttonText: Theme.text
+    palette.highlight: Theme.accent
+    palette.highlightedText: Theme.onAccent
+    palette.toolTipBase: Theme.raised
+    palette.toolTipText: Theme.text
+    palette.placeholderText: Theme.textMuted
+    readonly property var keyboardFocus: active ? activeFocusItem : workspace.floatingFocusItem
+    readonly property bool textInputFocused: keyboardFocus instanceof TextInput
+        || keyboardFocus instanceof TextEdit
 
     required property string shaderDir
     property url assetsUrl: typeof assetsUrl !== "undefined" ? assetsUrl : ""
@@ -35,6 +53,8 @@ ApplicationWindow {
     property var    initialKeys: []       // --key PARAM|TIME|VALUE|INTERP
     property var    initialGrade: []      // --grade INDEX=VALUE
     property string initialExport: ""     // --export PATH: render and quit
+    property int initialExportWidth: 1920
+    property int initialExportHeight: 1080
     property string initialChain: ""      // --chain ascii,glitch,blur
     property string initialSave: ""       // --save PATH: write project, quit
     property string initialSavePreset: "" // --savepreset NAME: write look, quit
@@ -45,35 +65,15 @@ ApplicationWindow {
     property string initialQueue: ""      // --queue PATH: batch render, then quit
     property var    initialTexts: []      // --text TEXT[|LANE|SECONDS|SIZE]
 
-    // Which side each dock sits on. Persisted, so an arrangement someone
-    // sets up survives a restart.
-    //
-    // ONE flag, with both sides derived from it - not two independent strings.
-    // The swap used to assign effectsSide and then settingsSide, and QML
-    // bindings re-evaluate on the FIRST assignment: in between the two, both
-    // docks read "right", both resolved to GridLayout column 2, and two items
-    // claiming one cell makes the layout place the second somewhere else
-    // entirely. That is why a shifted dock would not stay put. Deriving both
-    // from a single property means they can never disagree, even momentarily.
-    property bool docksSwapped: false
-    property int rightDockTab: 0
-    readonly property string effectsSide:  docksSwapped ? "right" : "left"
-    readonly property string settingsSide: docksSwapped ? "left"  : "right"
-    Settings {
-        category: "layout"
-        property alias docksSwapped: root.docksSwapped
-    }
-    function swapDocks() { docksSwapped = !docksSwapped }
+    // Workspace layout is separate from project data and never owns engine state.
     // Effects offered by the picker and the chain's "+" menu. Every id needs a
     // matching <id>.frag.qsb and <id>.manifest.json in shaderDir.
     readonly property var effectIds: ["ascii", "halftone", "dither", "glitch",
-                                      "pixel_sort", "blur", "oscilloscope",
-                                      "datamosh", "cyanotype", "risograph",
-                                      "thermal", "terminal", "electron_scan",
-                                      "kaleido", "mirror_tile", "flow_warp",
-                                      "voronoi_shatter", "dot_field",
-                                      "tunnel", "lens", "bloom",
-                                      "feedback", "slit_scan", "post_fx"]
+                                      "pixel_sort", "oscilloscope", "datamosh",
+                                      "risograph", "electron_scan", "kaleido", "flow_warp",
+                                      "voronoi_shatter", "fracture", "noise_field", "dot_field", "contour",
+                                      "tunnel", "lens", "prism_split", "shockwave", "bloom",
+                                      "feedback", "halation_grain", "slit_scan", "post_fx"]
 
     Component.onCompleted: {
         if (typeof assetsUrl !== "undefined" && assetsUrl) {
@@ -194,22 +194,26 @@ ApplicationWindow {
     // as Ctrl+Shift+Z: both are in common use and neither collides here.
     Shortcut {
         sequences: [StandardKey.Undo]
+        context: Qt.ApplicationShortcut
+        enabled: !root.textInputFocused
         onActivated: viewport.undo()
     }
     Shortcut {
         sequences: [StandardKey.Redo, "Ctrl+Y"]
+        context: Qt.ApplicationShortcut
+        enabled: !root.textInputFocused
         onActivated: viewport.redo()
     }
-    Shortcut { sequences: [StandardKey.Save]; onActivated: appMenu.saveProject() }
-    Shortcut { sequence: "Space";   onActivated: viewport.playing ? viewport.pause()
+    Shortcut { sequences: [StandardKey.Save]; context: Qt.ApplicationShortcut; onActivated: appMenu.saveProject() }
+    Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !root.textInputFocused; onActivated: viewport.playing ? viewport.pause()
                                                                   : viewport.play() }
-    Shortcut { sequence: "1";       onActivated: viewport.mode = 0 }
-    Shortcut { sequence: "2";       onActivated: viewport.mode = 1 }
+    Shortcut { sequence: "1"; context: Qt.ApplicationShortcut; enabled: !root.textInputFocused; onActivated: viewport.mode = 0 }
+    Shortcut { sequence: "2"; context: Qt.ApplicationShortcut; enabled: !root.textInputFocused; onActivated: viewport.mode = 1 }
     // These two were documented in Help before they existed. The shortcut sheet
     // draws from the same list the app binds, so it cannot drift again.
-    Shortcut { sequences: [StandardKey.Open]; onActivated: appMenu.openProject() }
-    Shortcut { sequence: "Ctrl+E";  onActivated: appMenu.exportVideo() }
-    Shortcut { sequence: "Ctrl+N";  onActivated: viewport.newProject() }
+    Shortcut { sequences: [StandardKey.Open]; context: Qt.ApplicationShortcut; onActivated: appMenu.openProject() }
+    Shortcut { sequence: "Ctrl+E"; context: Qt.ApplicationShortcut; onActivated: appMenu.exportVideo() }
+    Shortcut { sequence: "Ctrl+N"; context: Qt.ApplicationShortcut; onActivated: viewport.newProject() }
 
     // Batch render. Same settle delay as --export: the engine has to exist and
     // the clips have to be in place before a job snapshots them.
@@ -276,7 +280,8 @@ ApplicationWindow {
         onTriggered: {
             console.log("[Main] startExport ->", root.initialExport)
             const norm = root.initialExport.replace(/\\/g, "/")
-            viewport.startExport(norm.startsWith("file:") ? norm : ("file:///" + norm), 0)
+            viewport.startExport(norm.startsWith("file:") ? norm : ("file:///" + norm), 0,
+                                 root.initialExportWidth, root.initialExportHeight, 60)
         }
     }
 
@@ -296,14 +301,15 @@ ApplicationWindow {
 
 
     ColumnLayout {
+        id: rootLayout
         anchors.fill: parent
         spacing: 0
 
         // ── Top Header Bar (matches Figma 3_37.png) ──
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 46
-            color: "#000000"
+            implicitHeight: 48
+            color: Theme.panel
 
             // Left: Embedded Menu Bar (File, Edit, View, Help)
             AppMenu {
@@ -312,17 +318,25 @@ ApplicationWindow {
                 anchors.leftMargin: 8
                 anchors.verticalCenter: parent.verticalCenter
                 viewport: viewport
+                effectIds: root.effectIds
+                panelManager: workspace
                 onRequestExit: Qt.quit()
+                onRequestPanel: (panelId) => workspace.togglePanel(panelId)
+                onResetWorkspaceRequested: workspace.resetLayout()
+                showColor: workspace.isPanelActive("color")
+                showQueue: workspace.isPanelActive("queue")
             }
 
             // Center: RIFT Monogram Logo (just the logo, not full text)
             Image {
                 id: monogramLogo
+                visible: root.width >= 1008
                 anchors.centerIn: parent
                 source: Theme.monogram
                 height: 32
                 fillMode: Image.PreserveAspectFit
                 smooth: true
+                mipmap: true
             }
 
             // Bottom hairline seam
@@ -334,58 +348,64 @@ ApplicationWindow {
                 color: Theme.hairline
             }
 
-            // Right side: Precision Segmented Mode Switcher [ REACT | LIVE ]
+            // Borderless mode controls share one icon and text baseline.
             Rectangle {
                 anchors.right: parent.right
                 anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
-                height: 28
-                width: modeRow.implicitWidth + 4
+                height: 40
+                width: modeRow.implicitWidth + 8
                 radius: Theme.radius
-                color: "#121212"
-                border.width: 1
-                border.color: "#242424"
+                color: "transparent"
+                border.width: 0
 
                 Row {
                     id: modeRow
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: Theme.gap
 
                     // REACT segment
                     Rectangle {
                         id: reactSegment
-                        height: 22
+                        height: 32
                         width: reactContent.implicitWidth + 16
-                        radius: 3
-                        color: viewport.mode === 0 ? "#262626" : (reactHover.hovered ? "#1C1C1C" : "transparent")
-                        border.width: viewport.mode === 0 ? 1 : 0
-                        border.color: "#3A3A3A"
+                        radius: Theme.radius
+                        color: reactHover.hovered ? Theme.hover : "transparent"
+                        activeFocusOnTab: true
+                        border.width: activeFocus ? Theme.focusWidth : 0
+                        border.color: Theme.focusRing
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: "React mode"
+                        Accessible.checked: viewport.mode === 0
+                        Accessible.onPressAction: viewport.mode = 0
+                        Keys.onSpacePressed: viewport.mode = 0
+                        Keys.onReturnPressed: viewport.mode = 0
 
                         Row {
                             id: reactContent
                             anchors.centerIn: parent
-                            spacing: 5
+                            height: 18
+                            spacing: Theme.gap
 
                             Canvas {
                                 id: reactIcon
-                                width: 12; height: 12
+                                width: 18; height: 18
                                 anchors.verticalCenter: parent.verticalCenter
+                                property color ink: viewport.mode === 0 ? Theme.text : Theme.textMuted
+                                onInkChanged: requestPaint()
                                 onPaint: {
                                     const ctx = getContext("2d")
                                     ctx.reset()
-                                    ctx.fillStyle = viewport.mode === 0 ? "#EDEDED" : "#777777"
+                                    ctx.strokeStyle = ink
+                                    ctx.lineWidth = 1.5
+                                    ctx.lineCap = "round"
                                     ctx.beginPath()
-                                    const cx = 6, cy = 6, rOuter = 5.5, rInner = 2.2
-                                    for (let i = 0; i < 16; ++i) {
-                                        const r = (i % 2 === 0) ? rOuter : rInner
-                                        const a = (i * Math.PI) / 8 - Math.PI / 2
-                                        const x = cx + r * Math.cos(a)
-                                        const y = cy + r * Math.sin(a)
-                                        if (i === 0) ctx.moveTo(x, y)
-                                        else ctx.lineTo(x, y)
-                                    }
-                                    ctx.closePath()
-                                    ctx.fill()
+                                    ctx.moveTo(2, 10)
+                                    ctx.lineTo(5, 6)
+                                    ctx.lineTo(8, 13)
+                                    ctx.lineTo(12, 4)
+                                    ctx.lineTo(16, 9)
+                                    ctx.stroke()
                                 }
                                 Connections {
                                     target: viewport
@@ -394,11 +414,11 @@ ApplicationWindow {
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "REACT"
-                                color: viewport.mode === 0 ? "#FFFFFF" : (reactHover.hovered ? "#CCCCCC" : "#888888")
+                                text: "React"
+                                color: viewport.mode === 0 ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUI
-                                font.pixelSize: 10
-                                font.weight: Font.SemiBold
+                                font.pixelSize: Theme.size
+                                font.weight: Font.DemiBold
                                 font.letterSpacing: 0.6
                             }
                         }
@@ -411,41 +431,45 @@ ApplicationWindow {
                     // LIVE segment
                     Rectangle {
                         id: liveSegment
-                        height: 22
+                        height: 32
                         width: liveContent.implicitWidth + 16
-                        radius: 3
-                        color: viewport.mode === 1 ? "#262626" : (liveHover.hovered ? "#1C1C1C" : "transparent")
-                        border.width: viewport.mode === 1 ? 1 : 0
-                        border.color: viewport.mode === 1 ? Theme.danger : "#3A3A3A"
+                        radius: Theme.radius
+                        color: liveHover.hovered ? Theme.hover : "transparent"
+                        activeFocusOnTab: true
+                        border.width: activeFocus ? Theme.focusWidth : 0
+                        border.color: Theme.focusRing
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: "Live mode"
+                        Accessible.checked: viewport.mode === 1
+                        Accessible.onPressAction: viewport.mode = 1
+                        Keys.onSpacePressed: viewport.mode = 1
+                        Keys.onReturnPressed: viewport.mode = 1
 
                         Row {
                             id: liveContent
                             anchors.centerIn: parent
-                            spacing: 5
+                            height: 18
+                            spacing: Theme.gap
 
                             // Live beacon indicator
                             Rectangle {
-                                width: 6; height: 6; radius: 3
+                                width: 18; height: 18; radius: 9
                                 anchors.verticalCenter: parent.verticalCenter
-                                color: viewport.mode === 1 ? Theme.danger : "#666666"
+                                color: "transparent"
 
                                 Rectangle {
-                                    visible: viewport.mode === 1
                                     anchors.centerIn: parent
-                                    width: 10; height: 10; radius: 5
-                                    color: "transparent"
-                                    border.width: 1
-                                    border.color: Theme.danger
-                                    opacity: 0.5
+                                    width: 8; height: 8; radius: 4
+                                    color: viewport.mode === 1 ? Theme.danger : Theme.textMuted
                                 }
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "LIVE"
-                                color: viewport.mode === 1 ? "#FFFFFF" : (liveHover.hovered ? "#CCCCCC" : "#888888")
+                                text: "Live"
+                                color: viewport.mode === 1 ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUI
-                                font.pixelSize: 10
-                                font.weight: Font.SemiBold
+                                font.pixelSize: Theme.size
+                                font.weight: Font.DemiBold
                                 font.letterSpacing: 0.6
                             }
                         }
@@ -458,194 +482,157 @@ ApplicationWindow {
             }
         }
 
-        // ── centre row ──
-        // GridLayout, not RowLayout: a dock names the column it sits in, so
-        // swapping sides is a property change instead of reparenting.
-        GridLayout {
+        DockWorkspace {
+            id: workspace
+            objectName: "workspace"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            columns: 3
-            columnSpacing: 0
-            rowSpacing: 0
-
-            // Left dock: the effect chain and the audio meters. Named and
-            // collapsible so the picture can take the whole window.
-            Dock {
-                id: leftDock
-                title: nodeRail.currentTab === 0 ? "Effect Chain" : "Presets"
-                tabs: ["Effect Chain", "Presets"]
-                currentTab: nodeRail.currentTab
-                onTabClicked: (idx) => nodeRail.currentTab = idx
-                side: root.effectsSide
-                handleEdge: side === "left" ? "right" : "left"
-                actionText: "+"
-                onActionTriggered: {
-                    if (nodeRail.currentTab === 0) nodeRail.openAdd()
-                    else nodeRail.openSavePreset()
-                }
-                onTitleClicked: {
-                    nodeRail.currentTab = (nodeRail.currentTab === 0 ? 1 : 0)
-                }
-                Layout.row: 0
-                Layout.column: side === "left" ? 0 : 2
-                expandedWidth: 260
-                minWidth: 210
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-
-                    NodeRail {
-                        id: nodeRail
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        viewport: viewport
-                        effectIds: root.effectIds
-                        onNodeSelected: (idx) => root.rightDockTab = 0
-                    }
-                }
+            live: viewport.mode === 1
+            onPanelActionRequested: (panelId) => {
+                if (panelId === "effects") nodeRail.openAdd()
+                else if (panelId === "presets") presetRail.openSavePreset()
             }
+            panels: ({ effects: nodeRail, presets: presetRail, preview: previewPanel,
+                params: paramPanel, clip: clipInspector, color: colorPanel, queue: queuePanel,
+                timeline: timelinePanel, levels: channelMeters, controls: controlPanel,
+                audio: audioInputPanel })
 
+            NodeRail {
+                id: nodeRail
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+                effectIds: root.effectIds
+                onNodeSelected: (idx) => workspace.showPanel("params")
+            }
+            NodeRail {
+                id: presetRail
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                currentTab: 1
+                viewport: viewport
+                effectIds: root.effectIds
+            }
             ColumnLayout {
-                Layout.row: 0
-                Layout.column: 1
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumWidth: 200
+                id: previewPanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
                 spacing: 0
+                clip: true
                 Item {
                     id: viewportContainer
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
 
-                    // Dark letterbox/pillarbox background behind framed render
-                    Rectangle {
-                        anchors.fill: parent
-                        color: "#050507"
-                    }
-
+                    // Preserve the composition aspect without a black editor surround.
+                    Rectangle { anchors.fill: parent; color: Theme.panel }
                     RiftViewport {
                         id: viewport
-                        anchors.fill: parent
+                        readonly property real displayAspect: [16 / 9, 1, 4 / 3, 9 / 16, 21 / 9][projectAspect] || 16 / 9
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height * displayAspect)
+                        height: Math.min(parent.height, parent.width / displayAspect)
                         shaderDir: root.shaderDir
                     }
-
                     // Viewport HUD and interactive transform overlay
-                    ViewportOverlay {
-                        anchors.fill: parent
-                        viewport: viewport
+                    ViewportOverlay { anchors.fill: viewport; viewport: viewport }
+                    Column {
+                        objectName: "emptyPreviewGuidance"
+                        anchors.centerIn: parent
+                        width: Math.max(0, Math.min(320, parent.width - 24))
+                        spacing: Theme.gap
+                        visible: viewport.mode === 0 && !viewport.hasMedia && viewport.clips.length === 0
+                            && parent.height >= implicitHeight + 16
+                        Text {
+                            width: parent.width
+                            text: "Start with media"
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            color: Theme.text
+                            font.family: Theme.fontUI
+                            font.pixelSize: Theme.sizeTitle
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            width: parent.width
+                            text: "Add a video or image to start editing."
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            color: Theme.textDim
+                            font.family: Theme.fontUI
+                            font.pixelSize: Theme.size
+                        }
+                        FlatButton {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            label: "Add clip"
+                            onClicked: appMenu.importMedia()
+                        }
                     }
                 }
-                TransportBar {
-                    Layout.fillWidth: true
-                    viewport: viewport
-                    onImportRequested: appMenu.importMedia()
-                }
+                TransportBar { Layout.fillWidth: true; viewport: viewport }
             }
-
-            // Right dock: Tab switcher between Parameters, Clip, Color, and Queue
-            Dock {
-                id: rightDock
-                title: root.rightDockTab === 0 ? "Parameters" : (root.rightDockTab === 1 ? "Clip" : (root.rightDockTab === 2 ? "Color" : "Queue"))
-                tabs: ["Params", "Clip", "Color", "Queue"]
-                currentTab: root.rightDockTab
-                onTabClicked: (idx) => root.rightDockTab = idx
-                side: root.settingsSide
-                handleEdge: side === "left" ? "right" : "left"
-                actionText: ""
-                onTitleClicked: {
-                    root.rightDockTab = (root.rightDockTab + 1) % 4
-                }
-                Layout.row: 0
-                Layout.column: side === "left" ? 0 : 2
-                expandedWidth: 330
-                minWidth: 280
-                maxWidth: 560
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-
-                    ParamPanel {
-                        id: paramPanel
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        visible: (viewport.mode === 1) || (viewport.mode === 0 && root.rightDockTab === 0)
-                        viewport: viewport
-                        onChannelPicked: (ch) => channelMeters.highlight = ch
-                    }
-
-                    ClipInspector {
-                        id: clipInspector
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        visible: viewport.mode === 0 && root.rightDockTab === 1
-                        viewport: viewport
-                    }
-
-                    // Live first: this is the panel you reach for on stage.
-                    ControlPanel {
-                        Layout.fillWidth: true
-                        visible: viewport.mode === 1
-                        viewport: viewport
-                    }
-                    // Audio source second in Live
-                    AudioInputPanel {
-                        Layout.fillWidth: true
-                        visible: viewport.mode === 1
-                        viewport: viewport
-                    }
-
-                    ColorPanel {
-                        id: colorPanel
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        visible: viewport.mode === 0 && root.rightDockTab === 2
-                        viewport: viewport
-                        onChannelPicked: (ch) => channelMeters.highlight = ch
-                    }
-
-                    QueuePanel {
-                        id: queuePanel
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        visible: viewport.mode === 0 && root.rightDockTab === 3
-                        viewport: viewport
-                    }
-                }
+            ParamPanel {
+                id: paramPanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+                onChannelPicked: (ch) => channelMeters.highlight = ch
             }
-        }
-
-        // ── timeline & channel meters (matches Figma 7_123.png) ──
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 220
-            Layout.maximumHeight: 250
-            Layout.fillHeight: false
-            visible: viewport.mode === 0
-            spacing: 0
-
-            TimelinePanel {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+            ClipInspector {
+                id: clipInspector
+                parent: workspace.parkingItem
+                anchors.fill: parent
                 viewport: viewport
             }
-
+            ColorPanel {
+                id: colorPanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+                onChannelPicked: (ch) => channelMeters.highlight = ch
+            }
+            QueuePanel {
+                id: queuePanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+            }
+            TimelinePanel {
+                id: timelinePanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+                shortcutsSuspended: workspace.dragPanel !== ""
+            }
             ChannelMeters {
                 id: channelMeters
-                Layout.preferredWidth: rightDock.width
-                Layout.fillHeight: true
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+            }
+            ControlPanel {
+                id: controlPanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
+                viewport: viewport
+            }
+            AudioInputPanel {
+                id: audioInputPanel
+                parent: workspace.parkingItem
+                anchors.fill: parent
                 viewport: viewport
             }
         }
 
         // Live only: your controller, and the transport/input strip under it.
         RowLayout {
+            id: liveControllerRow
             Layout.fillWidth: true
             visible: viewport.mode === 1
-            Layout.preferredHeight: controllerView.implicitHeight
-            Layout.maximumHeight: controllerView.implicitHeight
+            Layout.minimumHeight: 120
+            Layout.preferredHeight: Math.min(controllerView.implicitHeight, root.height * 0.34)
+            Layout.maximumHeight: liveControllerRow.Layout.preferredHeight
             spacing: 0
 
             ControllerView {

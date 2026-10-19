@@ -14,7 +14,13 @@ Rectangle {
     required property var viewport
     property bool expanded: true
 
+    function deviceLabel(device) {
+        const name = String(device.name).replace(/\s*\(playing\)\s*$/i, "")
+        return (device.loopback ? "Output (loopback): " : "Input: ") + name
+    }
+
     color: Theme.panel
+    radius: Theme.panelRadius
     // Only what is on screen. A closed panel is its header and nothing else.
     implicitHeight: hdr.height
                     + (expanded ? col.implicitHeight + Theme.padding * 2 : 0)
@@ -35,7 +41,7 @@ Rectangle {
         // Live level, so you can see it is hearing something before
         // wondering why nothing moves.
         Rectangle {
-            visible: panel.viewport.liveInput
+            visible: panel.viewport.liveInput && panel.width >= 400
             implicitWidth: 54
             implicitHeight: 6
             radius: 0
@@ -48,7 +54,8 @@ Rectangle {
             }
         }
         FlatButton {
-            label: panel.viewport.liveInput ? "Stop" : "Listen"
+            label: panel.viewport.liveInput ? "Stop audio" : "Listen to audio"
+            enabled: panel.viewport.liveInput || srcPick.devs.length > 0
             active: panel.viewport.liveInput
             onClicked: panel.viewport.liveInput = !panel.viewport.liveInput
         }
@@ -70,6 +77,7 @@ Rectangle {
 
             ComboBox {
                 id: srcPick
+                objectName: "audioCaptureDevice"
                 Layout.fillWidth: true
                 implicitHeight: Theme.control
                 // Re-queried, not bound once. liveDevices() is a plain call, so the
@@ -81,9 +89,9 @@ Rectangle {
                 onPressedChanged: if (pressed) refresh()
                 // Outputs are marked, because "capture what this device is
                 // playing" is not what people expect a device list to mean.
-                model: devs.map(function (d) {
-                    return d.loopback ? (d.name + "  <- playing") : d.name
-                })
+                model: devs.map(panel.deviceLabel)
+                Accessible.name: "Audio capture device"
+                displayText: count === 0 ? "No audio devices found" : (currentIndex < 0 ? "Select an audio device" : currentText)
                 currentIndex: panel.viewport.liveDevice
                 onActivated: panel.viewport.liveDevice = currentIndex
 
@@ -98,18 +106,18 @@ Rectangle {
                 }
                 background: Rectangle {
                     color: Theme.raised
-                    radius: 0
+                    radius: Theme.radius
                     border.width: 1
                     border.color: srcPick.activeFocus ? Theme.accent : Theme.hairline
                 }
                 popup: Popup {
                     y: srcPick.height
-                    width: Math.max(srcPick.width, 320)
+                    width: srcPick.width
                     implicitHeight: Math.min(contentItem.implicitHeight, 300)
                     padding: 1
                     background: Rectangle {
-                        color: Theme.raised
-                        radius: 0
+                        color: Theme.flyout
+                        radius: Theme.panelRadius
                         border.width: 1
                         border.color: Theme.hairline
                     }
@@ -117,20 +125,25 @@ Rectangle {
                         clip: true
                         implicitHeight: contentHeight
                         model: srcPick.delegateModel
+                        currentIndex: srcPick.highlightedIndex
+                        boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar {}
                     }
                 }
                 delegate: ItemDelegate {
+                    id: deviceOption
                     required property string modelData
-                    width: Math.max(srcPick.width, 320)
-                    height: 28
+                    required property int index
+                    width: srcPick.width
+                    height: Theme.rowHeight
+                    highlighted: srcPick.highlightedIndex === index
                     background: Rectangle {
-                        color: parent.hovered ? Theme.accent : "transparent"
+                        color: deviceOption.hovered || deviceOption.highlighted ? Theme.accent : "transparent"
                     }
                     contentItem: Text {
                         leftPadding: 8
                         text: modelData
-                        color: parent.parent.hovered ? Theme.bg : Theme.text
+                        color: deviceOption.hovered || deviceOption.highlighted ? Theme.foregroundFor(Theme.accent) : Theme.text
                         font.family: Theme.fontUI
                         font.pixelSize: Theme.sizeSmall
                         verticalAlignment: Text.AlignVCenter
@@ -142,12 +155,16 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "Pick an output marked \"playing\" to react to a DAW, a "
-                    + "browser or anything else on this machine. Pick an input "
-                    + "for a microphone or an interface."
+                text: srcPick.devs.length === 0
+                    ? "Connect an audio device, then refresh the device list."
+                    : "Output (loopback) captures what a DAW or browser plays through that output. Input captures a microphone or audio interface."
                 color: Theme.textMuted
                 font.family: Theme.fontUI
                 font.pixelSize: Theme.sizeTiny
+            }
+            FlatButton {
+                label: "Refresh devices"
+                onClicked: srcPick.refresh()
             }
         }
     }

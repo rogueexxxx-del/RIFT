@@ -3,7 +3,7 @@
   "name": "RISOGRAPH",
   "version": 1,
   "frag": "risograph.frag",
-  "category": "generator",
+  "category": "texture",
   "uniforms": [
     {
       "name": "ink_count",
@@ -22,7 +22,7 @@
       "min": 2.0,
       "max": 20.0,
       "step": 0.5,
-      "default": 6.0,
+      "default": 7.0,
       "discrete": false
     },
     {
@@ -32,14 +32,14 @@
       "min": 0.0,
       "max": 1.0,
       "step": 0.02,
-      "default": 0.4,
+      "default": 0.22,
       "discrete": false,
       "binding": {
         "channel": "transient",
         "depth": 0.5,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -62,7 +62,7 @@
       "min": 0.0,
       "max": 1.0,
       "step": 0.02,
-      "default": 0.4,
+      "default": 0.18,
       "discrete": false
     }
   ],

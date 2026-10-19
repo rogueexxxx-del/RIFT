@@ -1,0 +1,15 @@
+{
+  "id": "halation_grain",
+  "name": "HALATION + GRAIN",
+  "version": 1,
+  "frag": "halation_grain.frag",
+  "category": "light",
+  "uniforms": [
+    {"name":"threshold","label":"THRESHOLD","type":"float","min":0.3,"max":1.0,"step":0.01,"default":0.72,"discrete":false,"binding":{"channel":"highs","depth":0.15,"curve":"lin","attack":0.08,"release":0.25,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"radiusPx","label":"RADIUS","type":"float","min":0.5,"max":8.0,"step":0.1,"default":2.0,"discrete":false,"binding":{"channel":"highs","depth":1.5,"curve":"lin","attack":0.08,"release":0.25,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"halation","label":"HALATION","type":"float","min":0.0,"max":1.5,"step":0.01,"default":0.45,"discrete":false,"binding":{"channel":"transient","depth":0.25,"curve":"lin","attack":0.02,"release":0.3,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"grain","label":"FILM GRAIN","type":"float","min":0.0,"max":0.12,"step":0.001,"default":0.025,"discrete":false,"binding":{"channel":"melody","depth":0.02,"curve":"lin","attack":0.2,"release":0.5,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"quality","label":"QUALITY","type":"float","min":0.0,"max":1.0,"step":1.0,"default":0.0,"discrete":true}
+  ],
+  "samplers": [{"name":"u_tex","unit":0,"source":"upstream"}]
+}

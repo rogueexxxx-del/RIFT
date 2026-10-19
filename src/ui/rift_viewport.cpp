@@ -35,6 +35,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <array>
 #include <mutex>
 #include "engine.hpp"
 #include "rhi_context.hpp"
@@ -130,15 +131,15 @@ struct RiftViewport::Priv {
     // rather than posted: it is tiny and read once per frame.
     std::mutex        params_mu;
     std::vector<Node> chain;
-    // The shared chain, parked while the rail is editing a CLIP's own stack.
-    // selectClip() overwrites `chain` with the clip's passes, and without
-    // somewhere to put the shared one it was simply destroyed: going back to
-    // the shared view (-1) then showed the clip's stack AS the shared chain,
-    // and the next save wrote it as such.
-    std::vector<Node> shared_chain;
-    bool              shared_parked = false;
     bool              params_dirty = false;   // values only -> setParams
     bool              chain_dirty  = true;    // structure -> rebuild + build
+
+    struct LutUpdate {
+        std::array<uint32_t, 256> line{}, glow{};
+        bool dirty = false;
+    };
+    std::mutex lut_mu;
+    std::array<LutUpdate, 4> pending_luts;
 
     // Offscreen export engine (own QRhi + own render thread).
     std::unique_ptr<rift::Engine> export_engine;
@@ -184,15 +185,8 @@ void RiftViewport::setShaderDir(const QString& s) {
     if (shader_dir_ == s) return;
     shader_dir_ = s;
     emit shaderDirChanged();
-    // Manifests live beside the shaders, so the chain can only be described
-    // once the directory is known. Seed a default node if empty.
-    {
-        std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (d_->chain.empty()) {
-            d_->chain.push_back({ QStringLiteral("ascii"), {}, {}, 0 });
-            selected_ = 0;
-        }
-    }
+    // Manifests live beside the shaders, so the selected clip's effects can
+    // only be described once the directory is known.
     for (int i = 0; i < int(d_->chain.size()); ++i) loadManifest_(i);
     loadGradeManifest_();        // the grade manifest sits beside the shaders
     { std::lock_guard<std::mutex> lk(d_->params_mu); d_->chain_dirty = true; }
@@ -210,6 +204,7 @@ QString RiftViewport::effect() const {
 }
 
 void RiftViewport::setEffect(const QString& e) {
+    if (edited_clip_ < 0) return;
     {
         // Bail out before pushing undo if nothing would change, otherwise the
         // stack fills with no-op steps.
@@ -218,13 +213,14 @@ void RiftViewport::setEffect(const QString& e) {
             && selected_ < int(d_->chain.size())
             && d_->chain[selected_].effect == e) return;
     }
-    pushUndo_(QStringLiteral("effect ") + e, QStringLiteral("setEffect"));
+    const auto history = pushUndo_(QStringLiteral("effect ") + e, QStringLiteral("setEffect"));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
         if (d_->chain.empty()) d_->chain.push_back({});
         if (selected_ < 0 || selected_ >= int(d_->chain.size())) selected_ = 0;
         if (d_->chain[selected_].effect == e) return;
         d_->chain[selected_].effect = e;
+        d_->chain[selected_].params.clear();
     }
     loadManifest_(selected_);       // different effect => different uniforms
     {
@@ -271,7 +267,8 @@ void RiftViewport::setSelectedNode(int i) {
 }
 
 void RiftViewport::addNode(const QString& effect) {
-    pushUndo_(QStringLiteral("add ") + effect, QStringLiteral("addNode"));
+    if (edited_clip_ < 0) return;
+    const auto history = pushUndo_(QStringLiteral("add ") + effect, QString());
     int idx;
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
@@ -292,9 +289,8 @@ void RiftViewport::removeNode(int index) {
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
         if (index < 0 || index >= int(d_->chain.size())) return;
-        if (d_->chain.size() <= 1) return;     // keep at least one effect
     }
-    pushUndo_(QStringLiteral("remove node"), QStringLiteral("removeNode"));
+    const auto history = pushUndo_(QStringLiteral("remove node"), QString());
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
         d_->chain.erase(d_->chain.begin() + index);
@@ -327,7 +323,7 @@ void RiftViewport::moveNode(int index, int delta) {
         if (index < 0 || index >= int(d_->chain.size())) return;
         if (to < 0 || to >= int(d_->chain.size())) return;
     }
-    pushUndo_(QStringLiteral("reorder chain"), QStringLiteral("moveNode"));
+    const auto history = pushUndo_(QStringLiteral("reorder chain"), QStringLiteral("moveNode"));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
         const int to = index + delta;
@@ -398,7 +394,14 @@ void RiftViewport::publishParams_() {
             const auto& ps = d_->chain[selected_].params;
             for (int i = 0; i < params_ui_.size() && i < int(ps.size()); ++i) {
                 QVariantMap m = params_ui_.at(i).toMap();
+                m[QStringLiteral("value")] = double(ps[i].value);
                 m[QStringLiteral("keyCount")] = int(ps[i].keys.size());
+                m[QStringLiteral("channel")] = ps[i].bind.channel;
+                m[QStringLiteral("depth")] = double(ps[i].bind.depth);
+                m[QStringLiteral("attack")] = double(ps[i].bind.attack);
+                m[QStringLiteral("release")] = double(ps[i].bind.release);
+                m[QStringLiteral("inLo")] = double(ps[i].bind.in_lo);
+                m[QStringLiteral("inHi")] = double(ps[i].bind.in_hi);
                 params_ui_[i] = m;
             }
         }
@@ -424,14 +427,26 @@ void RiftViewport::loadManifest_(int nodeIndex) {
     }
 
     const std::string fxKey = fx.toStdString();
+    auto install = [this, nodeIndex](QVariantList ui, std::vector<rift::Param> ps) {
+        std::lock_guard<std::mutex> lk(d_->params_mu);
+        if (nodeIndex >= int(d_->chain.size())) return;
+        auto& node = d_->chain[nodeIndex];
+        for (int i = 0; i < int(ps.size()) && i < int(node.params.size()); ++i) {
+            const auto& saved = node.params[i];
+            ps[i].value = qBound(ps[i].min_v, saved.value, ps[i].max_v);
+            ps[i].bind = saved.bind;
+            ps[i].keys = saved.keys;
+            QVariantMap m = ui[i].toMap();
+            m[QStringLiteral("value")] = double(ps[i].value);
+            ui[i] = m;
+        }
+        node.params = std::move(ps);
+        node.ui = std::move(ui);
+        d_->params_dirty = true;
+    };
     auto it = s_manifestCache.find(fxKey);
     if (it != s_manifestCache.end()) {
-        std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (nodeIndex < int(d_->chain.size())) {
-            d_->chain[nodeIndex].params = it->second.params;
-            d_->chain[nodeIndex].ui     = it->second.ui;
-            d_->params_dirty = true;
-        }
+        install(it->second.ui, it->second.params);
         return;
     }
 
@@ -462,11 +477,16 @@ void RiftViewport::loadManifest_(int nodeIndex) {
             m[QStringLiteral("max")]   = mx;
             m[QStringLiteral("step")]  = u.value(QStringLiteral("step")).toDouble(0.01);
             m[QStringLiteral("discrete")] = u.value(QStringLiteral("discrete")).toBool();
+            m[QStringLiteral("options")] = u.value(QStringLiteral("options")).toArray().toVariantList();
             m[QStringLiteral("value")] = def;
             m[QStringLiteral("default")] = def;
             m[QStringLiteral("channel")] = chan;
             m[QStringLiteral("depth")]   = depth;
             m[QStringLiteral("depthMax")] = mx - mn;      // full-range sweep
+            m[QStringLiteral("attack")] = b.value(QStringLiteral("attack")).toDouble(0.08);
+            m[QStringLiteral("release")] = b.value(QStringLiteral("release")).toDouble(0.24);
+            m[QStringLiteral("inLo")] = b.value(QStringLiteral("in_lo")).toDouble(0.0);
+            m[QStringLiteral("inHi")] = b.value(QStringLiteral("in_hi")).toDouble(1.0);
             ui.append(m);
 
             rift::Param p{};
@@ -479,8 +499,8 @@ void RiftViewport::loadManifest_(int nodeIndex) {
             p.bind.depth   = float(depth);
             p.bind.in_lo   = float(b.value(QStringLiteral("in_lo")).toDouble(0.0));
             p.bind.in_hi   = float(b.value(QStringLiteral("in_hi")).toDouble(1.0));
-            p.bind.attack  = float(b.value(QStringLiteral("attack")).toDouble(0.0));
-            p.bind.release = float(b.value(QStringLiteral("release")).toDouble(0.0));
+            p.bind.attack  = float(b.value(QStringLiteral("attack")).toDouble(0.08));
+            p.bind.release = float(b.value(QStringLiteral("release")).toDouble(0.24));
             p.bind.invert  = b.value(QStringLiteral("invert")).toBool() ? 1 : 0;
             const QString curve = b.value(QStringLiteral("curve")).toString();
             p.bind.curve = curve == QLatin1String("exp") ? RIFT_CURVE_EXP
@@ -494,12 +514,7 @@ void RiftViewport::loadManifest_(int nodeIndex) {
                  qPrintable(fx), qPrintable(path));
     }
 
-    std::lock_guard<std::mutex> lk(d_->params_mu);
-    if (nodeIndex < int(d_->chain.size())) {
-        d_->chain[nodeIndex].params = std::move(engineParams);
-        d_->chain[nodeIndex].ui     = std::move(ui);
-        d_->params_dirty = true;
-    }
+    install(std::move(ui), std::move(engineParams));
 }
 
 // ── project / preset serialisation (project_format.md v3) ─────────────────
@@ -603,6 +618,10 @@ void RiftViewport::loadGradeManifest_() {
         m[QStringLiteral("channel")]  = -1;
         m[QStringLiteral("depth")]    = 0.0;
         m[QStringLiteral("depthMax")] = mx - mn;
+        m[QStringLiteral("attack")] = 0.08;
+        m[QStringLiteral("release")] = 0.24;
+        m[QStringLiteral("inLo")] = 0.0;
+        m[QStringLiteral("inHi")] = 1.0;
         m[QStringLiteral("keyCount")] = 0;
         grade_ui_.append(m);
 
@@ -612,6 +631,8 @@ void RiftViewport::loadGradeManifest_() {
         p.max_v = float(mx);
         p.step  = float(u.value(QStringLiteral("step")).toDouble(0.01));
         p.bind.channel = -1;
+        p.bind.attack = 0.08f;
+        p.bind.release = 0.24f;
         grade_params_.push_back(p);
     }
     pushGrade_();
@@ -625,6 +646,10 @@ void RiftViewport::publishGrade_() {
         m[QStringLiteral("value")]    = double(p.value);
         m[QStringLiteral("channel")]  = p.bind.channel;
         m[QStringLiteral("depth")]    = double(p.bind.depth);
+        m[QStringLiteral("attack")]   = double(p.bind.attack);
+        m[QStringLiteral("release")]  = double(p.bind.release);
+        m[QStringLiteral("inLo")]     = double(p.bind.in_lo);
+        m[QStringLiteral("inHi")]     = double(p.bind.in_hi);
         m[QStringLiteral("keyCount")] = int(p.keys.size());
         grade_ui_[i] = m;
     }
@@ -651,9 +676,10 @@ QVariantList RiftViewport::gradeKeyInterpNow() const {
 }
 
 void RiftViewport::setGradeBinding(int index, int channel, qreal depth) {
+    if (applying_history_ || !std::isfinite(depth)) return;
     if (index < 0 || index >= int(grade_params_.size())) return;
     if (channel >= RIFT_CH_COUNT) return;
-    pushUndo_(QStringLiteral("grade patch"),
+    const auto history = pushUndo_(QStringLiteral("grade patch"),
               QStringLiteral("gradePatch:%1").arg(index));
     rift::Param& p = grade_params_[index];
     p.bind.channel = channel < 0 ? -1 : channel;
@@ -663,9 +689,26 @@ void RiftViewport::setGradeBinding(int index, int channel, qreal depth) {
     update();
 }
 
+void RiftViewport::setGradeBindingDynamics(int index, qreal attack, qreal release,
+                                           qreal inLo, qreal inHi) {
+    if (applying_history_ || !std::isfinite(attack) || !std::isfinite(release)
+        || !std::isfinite(inLo) || !std::isfinite(inHi)) return;
+    if (index < 0 || index >= int(grade_params_.size())) return;
+    const auto history = pushUndo_(QStringLiteral("grade patch dynamics"),
+              QStringLiteral("gradePatchDynamics:%1").arg(index));
+    auto& p = grade_params_[index];
+    p.bind.attack = float(qBound(0.0, double(attack), 0.99));
+    p.bind.release = float(qBound(0.0, double(release), 0.99));
+    p.bind.in_lo = float(qBound(0.0, double(inLo), 0.99));
+    p.bind.in_hi = float(qBound(double(p.bind.in_lo) + 0.01, double(inHi), 1.0));
+    p.env = 0.f;
+    publishGrade_();
+    update();
+}
+
 void RiftViewport::addGradeKey(int index) {
     if (index < 0 || index >= int(grade_params_.size())) return;
-    pushUndo_(QStringLiteral("grade key"),
+    const auto history = pushUndo_(QStringLiteral("grade key"),
               QStringLiteral("gradeKey:%1").arg(index));
     const double t = snapTime(playhead_);       // snapped for PLACEMENT
     auto& keys = grade_params_[index].keys;
@@ -692,7 +735,7 @@ void RiftViewport::removeGradeKeyAt(int index) {
     auto& keys = grade_params_[index].keys;
     const int at = keyAtPlayhead_(keys);
     if (at < 0) return;
-    pushUndo_(QStringLiteral("grade key"),
+    const auto history = pushUndo_(QStringLiteral("grade key"),
               QStringLiteral("gradeKeyDel:%1").arg(index));
     keys.erase(keys.begin() + at);
     publishGrade_();          // pushes to the engine and emits gradeChanged
@@ -703,7 +746,7 @@ void RiftViewport::removeGradeKeyAt(int index) {
 void RiftViewport::clearGradeKeys(int index) {
     if (index < 0 || index >= int(grade_params_.size())) return;
     if (grade_params_[index].keys.empty()) return;
-    pushUndo_(QStringLiteral("clear grade keys"),
+    const auto history = pushUndo_(QStringLiteral("clear grade keys"),
               QStringLiteral("gradeKeyClear:%1").arg(index));
     grade_params_[index].keys.clear();
     publishGrade_();          // pushes to the engine and emits gradeChanged
@@ -716,7 +759,7 @@ void RiftViewport::cycleGradeKeyInterp(int index) {
     auto& keys = grade_params_[index].keys;
     const int at = keyAtPlayhead_(keys);
     if (at < 0) return;
-    pushUndo_(QStringLiteral("grade key interp"),
+    const auto history = pushUndo_(QStringLiteral("grade key interp"),
               QStringLiteral("gradeKeyInterp:%1").arg(index));
     keys[at].interp = (keys[at].interp + 1) % 3;   // linear -> ease -> step
     publishGrade_();          // pushes to the engine and emits gradeChanged
@@ -733,7 +776,7 @@ int RiftViewport::keyGradeOnMarkers(int index) {
     double reach = track_dur_;
     if (d_->engine) reach = std::max(reach, d_->engine->audioDuration());
 
-    pushUndo_(QStringLiteral("grade keys on beats"),
+    const auto history = pushUndo_(QStringLiteral("grade keys on beats"),
               QStringLiteral("gradeBeats:%1").arg(index));
 
     const float v = grade_params_[index].value;
@@ -768,8 +811,9 @@ void RiftViewport::pushGrade_() {
 }
 
 void RiftViewport::setGradeParam(int index, qreal value) {
+    if (applying_history_ || !std::isfinite(value) || !std::isfinite(float(value))) return;
     if (index < 0 || index >= grade_ui_.size()) return;
-    pushUndo_(QStringLiteral("grade"), QStringLiteral("grade:%1").arg(index));
+    const auto history = pushUndo_(QStringLiteral("grade"), QStringLiteral("grade:%1").arg(index));
     QVariantMap m = grade_ui_.at(index).toMap();
     m[QStringLiteral("value")] = value;
     grade_ui_[index] = m;
@@ -782,7 +826,7 @@ void RiftViewport::setGradeParam(int index, qreal value) {
 }
 
 void RiftViewport::resetGrade() {
-    pushUndo_(QStringLiteral("reset grade"), QStringLiteral("resetGrade"));
+    const auto history = pushUndo_(QStringLiteral("reset grade"), QStringLiteral("resetGrade"));
     for (int i = 0; i < grade_ui_.size(); ++i) {
         const QVariantMap m = grade_ui_.at(i).toMap();
         if (i >= int(grade_params_.size())) continue;
@@ -825,7 +869,8 @@ QString RiftViewport::projectName() const {
 // Defaults to lane 1 and a fixed span: text is almost always laid OVER footage,
 // and it has no source whose length could be measured.
 void RiftViewport::addTextClip(const QString& text, int lane, qreal seconds) {
-    pushUndo_(QStringLiteral("add text"), QStringLiteral("addText"));
+    if (applying_history_ || !std::isfinite(seconds)) return;
+    const auto history = pushUndo_(QStringLiteral("add text"), QString());
 
     rift::ClipSpec c;
     c.kind  = rift::ClipSpec::Text;
@@ -844,6 +889,7 @@ void RiftViewport::addTextClip(const QString& text, int lane, qreal seconds) {
 
     has_media_ = true;
     pushClips_();
+    if (edited_clip_ < 0) selectClip(int(clip_specs_.size()) - 1);
     emit sourceChanged();
     update();
 }
@@ -852,7 +898,7 @@ void RiftViewport::setClipText(int index, const QString& text) {
     if (index < 0 || index >= int(clip_specs_.size())) return;
     if (clip_specs_[index].kind != rift::ClipSpec::Text) return;
     // Tagged per clip so typing a caption is one undo step, not one per letter.
-    pushUndo_(QStringLiteral("edit text"),
+    const auto history = pushUndo_(QStringLiteral("edit text"),
               QStringLiteral("clipText:%1").arg(index));
     clip_specs_[index].text.text = text.toStdString();
     pushClips_();
@@ -863,9 +909,12 @@ void RiftViewport::setClipTextStyle(int index, qreal size, qreal x, qreal y,
                                     qreal r, qreal g, qreal b, bool bold,
                                     qreal letterSpacing, qreal wrapWidth,
                                     const QString& font) {
+    if (applying_history_ || !std::isfinite(size) || !std::isfinite(x) || !std::isfinite(y)
+        || !std::isfinite(r) || !std::isfinite(g) || !std::isfinite(b)
+        || !std::isfinite(letterSpacing) || !std::isfinite(wrapWidth)) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
     if (clip_specs_[index].kind != rift::ClipSpec::Text) return;
-    pushUndo_(QStringLiteral("text style"),
+    const auto history = pushUndo_(QStringLiteral("text style"),
               QStringLiteral("clipTextStyle:%1").arg(index));
 
     auto& t = clip_specs_[index].text;
@@ -902,6 +951,16 @@ void RiftViewport::setMarkIn(double t) {
     emit marksChanged();
 }
 
+void RiftViewport::setSequenceDuration(qreal seconds) {
+    if (!std::isfinite(seconds) || seconds < 0.0 || seconds > 86400.0
+        || std::abs(seconds - sequence_duration_) < 1e-6) return;
+    const auto history = pushUndo_(QStringLiteral("sequence duration"), QStringLiteral("sequenceDuration"));
+    sequence_duration_ = seconds;
+    if (d_->engine) d_->engine->setSequenceDuration(seconds);
+    emit durationChanged();
+    update();
+}
+
 void RiftViewport::setMarkOut(double t) {
     mark_out_ = std::max(0.0, t);
     if (mark_out_ <= mark_in_) mark_in_ = 0.0;
@@ -911,6 +970,22 @@ void RiftViewport::setMarkOut(double t) {
 void RiftViewport::clearMarks() {
     mark_in_ = mark_out_ = 0.0;
     emit marksChanged();
+}
+
+bool RiftViewport::setSequenceRange(qreal start, qreal end) {
+    if (applying_history_ || !std::isfinite(start) || !std::isfinite(end)
+        || start < 0.0 || end > 86400.0
+        || !((start == 0.0 && end == 0.0) || end > start)) return false;
+    if (sequence_duration_ == end && mark_in_ == start && mark_out_ == end) return true;
+    const auto history = pushUndo_(QStringLiteral("sequence range"), QString());
+    sequence_duration_ = end;
+    mark_in_ = start;
+    mark_out_ = end;
+    if (d_->engine) d_->engine->setSequenceDuration(end);
+    emit marksChanged();
+    emit durationChanged();
+    update();
+    return true;
 }
 
 QStringList RiftViewport::systemFonts() const {
@@ -1053,7 +1128,8 @@ QStringList RiftViewport::blendNames() const {
 }
 
 void RiftViewport::setNodeBlend(int index, int blend, qreal mix) {
-    pushUndo_(QStringLiteral("node blend"), QStringLiteral("nodeBlend:%1").arg(index));
+    if (applying_history_ || !std::isfinite(mix)) return;
+    const auto history = pushUndo_(QStringLiteral("node blend"), QStringLiteral("nodeBlend:%1").arg(index));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
         if (index < 0 || index >= int(d_->chain.size())) return;
@@ -1332,7 +1408,7 @@ void RiftViewport::onControl_(const QString& key, qreal value) {
 }
 
 void RiftViewport::newProject() {
-    pushUndo_(QStringLiteral("new project"), QStringLiteral("new"));
+    const auto history = pushUndo_(QStringLiteral("new project"), QString());
 
     clip_specs_.clear();
     audio_clip_specs_.clear();
@@ -1343,28 +1419,30 @@ void RiftViewport::newProject() {
     project_path_.clear();
     project_title_.clear();
     has_media_ = false;
+    has_audio_ = false;
     media_name_.clear();
     project_aspect_ = 0;
+    sequence_duration_ = 0.0;
+    clearMarks();
+    if (d_->engine) d_->engine->setSequenceDuration(0.0);
+    emit durationChanged();
     d_->pending_media_path.clear();
     d_->pending_audio_path.clear();
     d_->pending_analysis_path.clear();
 
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        d_->shared_chain.clear();      // nothing parked in an empty session
-        d_->shared_parked = false;
         d_->chain.clear();
-        d_->chain.push_back({ QStringLiteral("ascii"), {}, {}, 0 });
-        selected_ = 0;
+        selected_ = -1;
         d_->chain_dirty = true;
     }
-    loadManifest_(0);
     loadGradeManifest_();          // grade back to neutral defaults
     pushGrade_();
 
     pushClips_();
     publishParams_();
     publishMarkers_();
+    pushAudioClips_();
     emit chainChanged();
     emit effectChanged();
     emit sourceChanged();
@@ -1418,6 +1496,11 @@ QVariantList RiftViewport::presets() const {
 }
 
 bool RiftViewport::savePresetNamed(const QString& name) {
+    if (edited_clip_ < 0) {
+        last_error_ = QStringLiteral("select a clip before saving a preset");
+        emit projectChanged();
+        return false;
+    }
     QString clean = name.trimmed();
     // Strip anything that cannot be a filename rather than failing on it: the
     // user typed a preset name, not a path.
@@ -1439,6 +1522,11 @@ bool RiftViewport::savePresetNamed(const QString& name) {
 // anything after applying a preset silently rewrote the preset itself. A preset
 // is a starting point you edit away from - editing it must never travel back.
 bool RiftViewport::applyPreset(const QString& path) {
+    if (edited_clip_ < 0) {
+        last_error_ = QStringLiteral("select a clip before applying a preset");
+        emit projectChanged();
+        return false;
+    }
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         last_error_ = QStringLiteral("cannot read ") + path;
@@ -1453,9 +1541,8 @@ bool RiftViewport::applyPreset(const QString& path) {
         return false;
     }
     // Undoable like any other edit, so a preset can be tried and backed out of.
-    pushUndo_(QStringLiteral("apply preset"), QStringLiteral("preset"));
+    const auto history = pushUndo_(QStringLiteral("apply preset"), QString());
     const bool ok = applyProjectJson_(root, /*asProject=*/false);
-    clearRedo_();
     last_error_ = QStringLiteral("applied ") + QFileInfo(path).completeBaseName();
     emit projectChanged();
     return ok;
@@ -1512,6 +1599,11 @@ bool RiftViewport::duplicatePreset(const QString& path) {
 }
 
 bool RiftViewport::saveProject(const QUrl& url, bool asProject) {
+    if (!asProject && edited_clip_ < 0) {
+        last_error_ = QStringLiteral("select a clip before saving a preset");
+        emit projectChanged();
+        return false;
+    }
     const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
     if (path.isEmpty()) { last_error_ = QStringLiteral("no path"); return false; }
 
@@ -1543,7 +1635,7 @@ QJsonObject RiftViewport::projectJson_(bool asProject,
                                        const QString& name) const {
     QJsonObject root;
     root[QStringLiteral("format")]  = QStringLiteral("rift-project");
-    root[QStringLiteral("version")] = 5;   // 5 adds "audio_clips" and clip "link"
+    root[QStringLiteral("version")] = 6;   // effects belong to clips only
     root[QStringLiteral("name")]    = name;
     root[QStringLiteral("kind")]    = asProject ? QStringLiteral("project")
                                                 : QStringLiteral("preset");
@@ -1554,6 +1646,8 @@ QJsonObject RiftViewport::projectJson_(bool asProject,
     if (asProject) {
         root[QStringLiteral("mode")]   = mode_;
         root[QStringLiteral("aspect")] = project_aspect_;
+        if (sequence_duration_ > 0.0)
+            root[QStringLiteral("sequenceDuration")] = sequence_duration_;
         // Forward slashes everywhere, so a project saved, reloaded and saved
         // again is byte-identical instead of flip-flopping separators.
         if (!d_->pending_analysis_path.isEmpty())
@@ -1587,18 +1681,11 @@ QJsonObject RiftViewport::projectJson_(bool asProject,
         root[QStringLiteral("markers")] = mk;
     }
 
-    // Shared chain. While a clip is selected the rail holds THAT clip's stack
-    // (stored on the clip itself) and the shared chain is parked, so read the
-    // parked copy in that case. Omitting the key instead meant saving - or
-    // taking an undo snapshot - with a clip selected dropped the shared chain
-    // from the document entirely, and the read side skips a missing "chain",
-    // so undo could not put it back either.
-    {
+    // Presets store the selected clip's look; projects store effects on clips.
+    if (!asProject) {
         QJsonArray chain;
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        const auto& nodes = (edited_clip_ >= 0 && d_->shared_parked)
-                          ? d_->shared_chain : d_->chain;
-        for (const auto& n : nodes) {
+        for (const auto& n : d_->chain) {
             QJsonObject node;
             node[QStringLiteral("shader")] = n.effect;
             QJsonArray ps;
@@ -1714,10 +1801,10 @@ bool RiftViewport::loadProject(const QUrl& url) {
     }
     // Loading a project is itself undoable, and the loaded state becomes the
     // new baseline - otherwise undo would step back into the previous project.
-    pushUndo_(QStringLiteral("open project"), QStringLiteral("open"));
+    const auto history = pushUndo_(QStringLiteral("open project"), QString());
     project_path_ = path;
+    clearMarks();
     const bool ok = applyProjectJson_(root);
-    clearRedo_();
     return ok;
 }
 
@@ -1725,6 +1812,10 @@ bool RiftViewport::loadProject(const QUrl& url) {
 // the SAME deserializer the file format uses.
 bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
     const int version = root.value(QStringLiteral("version")).toInt(1);
+    const QJsonObject current = applying_history_ ? historyJson_() : QJsonObject{};
+    const bool audioChanged = !applying_history_
+        || current.value(QStringLiteral("audio_clips")) != root.value(QStringLiteral("audio_clips"))
+        || current.value(QStringLiteral("historyAnalysis")) != root.value(QStringLiteral("historyAnalysis"));
 
     // Sources. v2 and older name a single media file; v3 uses `clips`.
     // Ignored outright when applying a preset: builds before 0.1.3 wrote the
@@ -1737,6 +1828,13 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
 
     if (asProject && root.contains(QStringLiteral("aspect")))
         setProjectAspect(root.value(QStringLiteral("aspect")).toInt(0));
+
+    if (asProject) {
+        sequence_duration_ = qBound(0.0,
+            root.value(QStringLiteral("sequenceDuration")).toDouble(), 86400.0);
+        if (d_->engine) d_->engine->setSequenceDuration(sequence_duration_);
+        emit durationChanged();
+    }
 
     if (root.contains(QStringLiteral("visualizerStyles"))) {
         QJsonArray visArr = root.value(QStringLiteral("visualizerStyles")).toArray();
@@ -1793,7 +1891,7 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
             // Per-clip stacks are restored below, once manifests give ranges.
             clip_specs_.push_back(c);
         }
-    } else if (version < 3) {
+    } else if (asProject && version < 3) {
         const QString media = root.value(QStringLiteral("media_path")).toString();
         if (!media.isEmpty()) {
             clip_specs_.clear();
@@ -1804,9 +1902,11 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
         }
     }
 
-    // Shared chain. v3 stores it flat; v2 keeps effect nodes inside `graph`.
-    QJsonArray chainArr = root.value(QStringLiteral("chain")).toArray();
-    if (chainArr.isEmpty() && version < 3) {
+    // Project-level effects from older files are intentionally discarded.
+    // A preset's top-level chain becomes the selected clip's effects.
+    QJsonArray chainArr = asProject ? QJsonArray{}
+                                    : root.value(QStringLiteral("chain")).toArray();
+    if (!asProject && chainArr.isEmpty() && version < 3) {
         for (const QJsonValue& nv :
              root.value(QStringLiteral("graph")).toObject()
                  .value(QStringLiteral("nodes")).toArray()) {
@@ -1819,20 +1919,25 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
         }
     }
 
-    if (!chainArr.isEmpty()) {
-        // The restored chain IS the shared one, so come back to the shared view
-        // rather than loading it underneath a clip's rail and stranding the
-        // parked copy (which the next selectClip(-1) would then put back).
-        edited_clip_ = -1;
+    for (int i = chainArr.size() - 1; i >= 0; --i) {
+        const QString shader = chainArr.at(i).toObject()
+                                   .value(QStringLiteral("shader")).toString();
+        if (shader.isEmpty() || !QFileInfo::exists(
+                QDir(shader_dir_).filePath(shader + QStringLiteral(".manifest.json")))) {
+            qWarning("RiftViewport: dropping unavailable effect '%s' from project or preset",
+                     qPrintable(shader));
+            chainArr.removeAt(i);
+        }
+    }
+
+    if (!asProject) {
         {
             std::lock_guard<std::mutex> lk(d_->params_mu);
-            d_->shared_chain.clear();
-            d_->shared_parked = false;
             d_->chain.clear();
             for (const QJsonValue& nv : chainArr)
                 d_->chain.push_back({ nv.toObject().value(QStringLiteral("shader"))
                                         .toString(), {}, {}, 0 });
-            selected_ = 0;
+            selected_ = d_->chain.empty() ? -1 : 0;
             d_->chain_dirty = true;
         }
         // Manifests first (ranges + labels), then saved values over the top.
@@ -1851,10 +1956,24 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
                     float(n.value(QStringLiteral("mix")).toDouble(1.0));
             }
         }
+        syncChainToClip_();
     }
 
     // Grade: manifest for ranges, then saved values.
-    loadGradeManifest_();
+    if (!applying_history_) {
+        loadGradeManifest_();
+    } else {
+        grade_ui_ = root.value(QStringLiteral("historyGradeUi")).toArray().toVariantList();
+        grade_params_.clear();
+        for (const QVariant& row : grade_ui_) {
+            const QVariantMap m = row.toMap();
+            rift::Param p{};
+            p.min_v = float(m.value(QStringLiteral("min")).toDouble());
+            p.max_v = float(m.value(QStringLiteral("max")).toDouble());
+            p.step = float(m.value(QStringLiteral("step")).toDouble());
+            grade_params_.push_back(p);
+        }
+    }
     const QJsonArray gradeArr = root.value(QStringLiteral("grade")).toArray();
     for (int i = 0; i < int(grade_params_.size()) && i < gradeArr.size(); ++i)
         paramFromJson(gradeArr.at(i).toObject(), grade_params_[i]);
@@ -1887,7 +2006,8 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
         markers_.clear();
         for (const QJsonValue& mv : root.value(QStringLiteral("markers")).toArray())
             markers_.push_back(mv.toDouble());
-        markers_edited_ = true;
+        markers_edited_ = applying_history_
+            ? root.value(QStringLiteral("historyMarkersEdited")).toBool() : true;
         publishMarkers_();
     }
 
@@ -1901,13 +2021,24 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
             for (const QJsonValue& nv : nodes) {
                 const QJsonObject n = nv.toObject();
                 const QString shader = n.value(QStringLiteral("shader")).toString();
-                if (shader == QLatin1String("ascii") && nodes.size() == 1) continue;
+                if (!applying_history_ && (shader.isEmpty() || !QFileInfo::exists(
+                        QDir(shader_dir_).filePath(shader + QStringLiteral(".manifest.json"))))) {
+                    qWarning("RiftViewport: dropping unavailable clip effect '%s'",
+                             qPrintable(shader));
+                    continue;
+                }
                 std::vector<rift::Param> ps;
                 for (const QJsonValue& pv : n.value(QStringLiteral("params")).toArray()) {
                     rift::Param p{};
                     p.min_v = -1e9f; p.max_v = 1e9f;   // widened; manifest wins on edit
                     p.bind.channel = -1;
                     paramFromJson(pv.toObject(), p);
+                    if (applying_history_) {
+                        const QJsonObject saved = pv.toObject();
+                        p.min_v = float(saved.value(QStringLiteral("historyMin")).toDouble());
+                        p.max_v = float(saved.value(QStringLiteral("historyMax")).toDouble());
+                        p.step = float(saved.value(QStringLiteral("historyStep")).toDouble());
+                    }
                     ps.push_back(p);
                 }
                 chain.emplace_back(shader.toStdString(), std::move(ps),
@@ -1916,6 +2047,28 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
                                              .toDouble(1.0)));
             }
             clip_specs_[ci].chain = std::move(chain);
+        }
+    }
+
+    if (asProject) {
+        edited_clip_ = -1;
+        {
+            std::lock_guard<std::mutex> lk(d_->params_mu);
+            d_->chain.clear();
+            selected_ = -1;
+            d_->chain_dirty = true;
+        }
+        const int clip = applying_history_
+            ? root.value(QStringLiteral("historyClip")).toInt(-1)
+            : (clip_specs_.empty() ? -1 : 0);
+        selectClip(clip);
+        if (applying_history_) {
+            std::lock_guard<std::mutex> lk(d_->params_mu);
+            const int node = root.value(QStringLiteral("historyNode")).toInt(-1);
+            selected_ = node >= 0 && node < int(d_->chain.size()) ? node : -1;
+            const QJsonArray ui = root.value(QStringLiteral("historyNodeUi")).toArray();
+            for (int i = 0; i < int(d_->chain.size()) && i < ui.size(); ++i)
+                d_->chain[i].ui = ui[i].toArray().toVariantList();
         }
     }
 
@@ -1935,17 +2088,29 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
                 a.link  = o.value(QStringLiteral("link")).toInt(-1);
                 audio_clip_specs_.push_back(a);
             }
-            d_->pending_audio_path.clear();
-            d_->pending_analysis_path = analysis;
+            if (applying_history_) {
+                d_->pending_audio_path = root.value(QStringLiteral("historyAudio")).toString();
+                d_->pending_analysis_path = root.value(QStringLiteral("historyAnalysis")).toString();
+            } else {
+                d_->pending_audio_path.clear();
+                d_->pending_analysis_path = analysis;
+            }
             has_audio_ = !audio_clip_specs_.empty();
-            pushAudioClips_();
+            if (audioChanged) pushAudioClips_();
         } else if (!audio.isEmpty()) {
             loadAudio(QUrl::fromLocalFile(audio),
                       analysis.isEmpty() ? QUrl()
                                          : QUrl::fromLocalFile(analysis));
         }
     }
-    if (!clip_specs_.empty()) {
+    if (applying_history_) {
+        d_->pending_media_path = root.value(QStringLiteral("historyMedia")).toString();
+        d_->pending_audio_path = root.value(QStringLiteral("historyAudio")).toString();
+        d_->pending_analysis_path = root.value(QStringLiteral("historyAnalysis")).toString();
+        media_name_ = root.value(QStringLiteral("historyMediaName")).toString();
+        has_media_ = root.value(QStringLiteral("historyHasMedia")).toBool();
+        has_audio_ = root.value(QStringLiteral("historyHasAudio")).toBool();
+    } else if (!clip_specs_.empty()) {
         media_name_ = QFileInfo(QString::fromStdString(clip_specs_.front().path))
                           .fileName();
         has_media_ = true;
@@ -1964,10 +2129,11 @@ bool RiftViewport::applyProjectJson_(const QJsonObject& root, bool asProject) {
 }
 
 void RiftViewport::setParam(int index, qreal value) {
+    if (applying_history_ || !std::isfinite(value) || !std::isfinite(float(value))) return;
     if (index < 0 || index >= params_ui_.size()) return;
     // Tagged per (node, param) so dragging one slider coalesces, but moving to
     // a different slider starts a new step.
-    pushUndo_(QStringLiteral("param"),
+    const auto history = pushUndo_(QStringLiteral("param"),
               QStringLiteral("param:%1:%2").arg(selected_).arg(index));
 
     QVariantMap m = params_ui_.at(index).toMap();
@@ -1976,7 +2142,7 @@ void RiftViewport::setParam(int index, qreal value) {
 
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ < int(d_->chain.size())) {
+        if (selected_ >= 0 && selected_ < int(d_->chain.size())) {
             auto& ps = d_->chain[selected_].params;
             if (index < int(ps.size())) {
                 ps[index].value = float(value);
@@ -1992,8 +2158,9 @@ void RiftViewport::setParam(int index, qreal value) {
 }
 
 void RiftViewport::setBinding(int index, int channel, qreal depth) {
+    if (applying_history_ || !std::isfinite(depth)) return;
     if (index < 0 || index >= params_ui_.size()) return;
-    pushUndo_(QStringLiteral("patch"), QStringLiteral("patch:%1:%2").arg(selected_).arg(index));
+    const auto history = pushUndo_(QStringLiteral("patch"), QStringLiteral("patch:%1:%2").arg(selected_).arg(index));
     if (channel >= RIFT_CH_COUNT) return;
     if (channel < 0) channel = -1;                 // anything negative = static
 
@@ -2004,7 +2171,7 @@ void RiftViewport::setBinding(int index, int channel, qreal depth) {
 
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ < int(d_->chain.size())) {
+        if (selected_ >= 0 && selected_ < int(d_->chain.size())) {
             auto& ps = d_->chain[selected_].params;
             if (index < int(ps.size())) {
                 auto& p = ps[index];
@@ -2015,7 +2182,43 @@ void RiftViewport::setBinding(int index, int channel, qreal depth) {
             }
         }
     }
+    syncChainToClip_();
     emit paramsChanged();                          // not mid-drag; safe to rebuild
+    update();
+}
+
+void RiftViewport::setBindingDynamics(int index, qreal attack, qreal release,
+                                      qreal inLo, qreal inHi) {
+    if (applying_history_ || !std::isfinite(attack) || !std::isfinite(release)
+        || !std::isfinite(inLo) || !std::isfinite(inHi)) return;
+    if (index < 0 || index >= params_ui_.size()) return;
+    const auto history = pushUndo_(QStringLiteral("patch dynamics"),
+              QStringLiteral("patchDynamics:%1:%2").arg(selected_).arg(index));
+    const float lo = float(qBound(0.0, double(inLo), 0.99));
+    const float hi = float(qBound(double(lo) + 0.01, double(inHi), 1.0));
+    QVariantMap m = params_ui_.at(index).toMap();
+    m[QStringLiteral("attack")] = qBound(0.0, double(attack), 0.99);
+    m[QStringLiteral("release")] = qBound(0.0, double(release), 0.99);
+    m[QStringLiteral("inLo")] = double(lo);
+    m[QStringLiteral("inHi")] = double(hi);
+    params_ui_[index] = m;
+    {
+        std::lock_guard<std::mutex> lk(d_->params_mu);
+        if (selected_ >= 0 && selected_ < int(d_->chain.size())) {
+            auto& ps = d_->chain[selected_].params;
+            if (index < int(ps.size())) {
+                auto& p = ps[index];
+                p.bind.attack = float(m.value(QStringLiteral("attack")).toDouble());
+                p.bind.release = float(m.value(QStringLiteral("release")).toDouble());
+                p.bind.in_lo = lo;
+                p.bind.in_hi = hi;
+                p.env = 0.f;
+                d_->params_dirty = true;
+            }
+        }
+    }
+    syncChainToClip_();
+    emit paramsChanged();
     update();
 }
 
@@ -2037,6 +2240,7 @@ RiftViewport::ExportJob RiftViewport::snapshotJob_(const QString& out, int quali
     j.fps          = fps > 0 ? fps : 60;
     j.mark_in      = mark_in_;
     j.mark_out     = mark_out_;
+    j.sequence_duration = sequence_duration_;
     j.no_watermark = noWatermark;
 
     // The WHOLE track, not just the first file: clip positions, trims, lanes,
@@ -2050,14 +2254,6 @@ RiftViewport::ExportJob RiftViewport::snapshotJob_(const QString& out, int quali
         j.clips.push_back(jc);
     }
 
-    {
-        // The WHOLE chain, in order - an export must match what the preview
-        // shows, not just the node that happens to be selected.
-        std::lock_guard<std::mutex> lk(d_->params_mu);
-        j.chain.reserve(d_->chain.size());
-        for (const auto& n : d_->chain)
-            j.chain.push_back({ n.effect.toStdString(), n.params, n.blend, n.mix });
-    }
     j.grade = grade_params_;      // the grade is applied to exported frames too
     return j;
 }
@@ -2075,7 +2271,8 @@ void RiftViewport::beginJob_(int index) {
 
     d_->export_out = j.out;
     d_->export_engine = std::make_unique<rift::Engine>(
-        nullptr, shader_dir_.toStdString(), shader_dir_.toStdString());
+        nullptr, shader_dir_.toStdString(), shader_dir_.toStdString(), false);
+    d_->export_engine->setSequenceDuration(j.sequence_duration);
 
     if (!j.clips.empty()) d_->export_engine->setClips(j.clips);
     if (!j.audio_clips.empty())
@@ -2083,9 +2280,8 @@ void RiftViewport::beginJob_(int index) {
     else if (!j.audio.isEmpty())
         d_->export_engine->loadAudio(j.audio.toStdString(),
                                      j.analysis.toStdString());
-    if (!j.chain.empty()) d_->export_engine->setChain(j.chain);
     if (!j.grade.empty()) d_->export_engine->setGrade(j.grade);
-    for (int i = 0; i < 4; ++i) bakeAndUploadLut_(i);
+    for (int i = 0; i < 4; ++i) bakeAndUploadLut_(i, true);
 
     rift_export_spec spec{};
     spec.width   = j.width;
@@ -2122,6 +2318,7 @@ void RiftViewport::beginJob_(int index) {
     publishQueue_();
 
     // Fires on the export engine's render thread - hop to the GUI thread.
+    d_->export_engine->startRenderThread();
     d_->export_engine->exportStart(spec, [](int32_t pct, int32_t done, void* user) {
         auto* self = static_cast<RiftViewport*>(user);
         QMetaObject::invokeMethod(self, "onExportProgress", Qt::QueuedConnection,
@@ -2186,32 +2383,125 @@ void RiftViewport::onExportProgress(int percent, bool done) {
 }
 
 // ── undo / redo ────────────────────────────────────────────────────────────
-void RiftViewport::pushUndo_(const QString& label, const QString& tag) {
-    if (applying_history_) return;      // a restore is not itself an edit
+QJsonObject RiftViewport::historyJson_() const {
+    QJsonObject root = projectJson_(true, QStringLiteral("history"));
+    // Private history fields never enter the on-disk project format.
+    if (!root.contains(QStringLiteral("audio_clips")))
+        root[QStringLiteral("audio_clips")] = QJsonArray{};
+    root[QStringLiteral("historyClip")] = edited_clip_;
+    root[QStringLiteral("historyNode")] = selected_;
+    root[QStringLiteral("historyMedia")] = d_->pending_media_path;
+    root[QStringLiteral("historyAudio")] = d_->pending_audio_path;
+    root[QStringLiteral("historyAnalysis")] = d_->pending_analysis_path;
+    root[QStringLiteral("historyMediaName")] = media_name_;
+    root[QStringLiteral("historyHasMedia")] = has_media_;
+    root[QStringLiteral("historyHasAudio")] = has_audio_;
+    root[QStringLiteral("historyPath")] = project_path_;
+    root[QStringLiteral("historyTitle")] = project_title_;
+    root[QStringLiteral("historyMarkIn")] = mark_in_;
+    root[QStringLiteral("historyMarkOut")] = mark_out_;
+    QVariantList gradeUi = grade_ui_;
+    for (int i = 0; i < gradeUi.size() && i < int(grade_params_.size()); ++i) {
+        const auto& p = grade_params_[i];
+        QVariantMap row = gradeUi[i].toMap();
+        row[QStringLiteral("value")] = double(p.value);
+        row[QStringLiteral("keyCount")] = int(p.keys.size());
+        row[QStringLiteral("channel")] = p.bind.channel;
+        row[QStringLiteral("depth")] = double(p.bind.depth);
+        row[QStringLiteral("attack")] = double(p.bind.attack);
+        row[QStringLiteral("release")] = double(p.bind.release);
+        row[QStringLiteral("inLo")] = double(p.bind.in_lo);
+        row[QStringLiteral("inHi")] = double(p.bind.in_hi);
+        gradeUi[i] = row;
+    }
+    root[QStringLiteral("historyGradeUi")] = QJsonArray::fromVariantList(gradeUi);
+    QJsonArray nodeUi;
+    {
+        std::lock_guard<std::mutex> lk(d_->params_mu);
+        for (const auto& node : d_->chain) {
+            QVariantList ui = node.ui;
+            for (int i = 0; i < ui.size() && i < int(node.params.size()); ++i) {
+                const auto& p = node.params[i];
+                QVariantMap row = ui[i].toMap();
+                row[QStringLiteral("value")] = double(p.value);
+                row[QStringLiteral("keyCount")] = int(p.keys.size());
+                row[QStringLiteral("channel")] = p.bind.channel;
+                row[QStringLiteral("depth")] = double(p.bind.depth);
+                row[QStringLiteral("attack")] = double(p.bind.attack);
+                row[QStringLiteral("release")] = double(p.bind.release);
+                row[QStringLiteral("inLo")] = double(p.bind.in_lo);
+                row[QStringLiteral("inHi")] = double(p.bind.in_hi);
+                ui[i] = row;
+            }
+            nodeUi.append(QJsonArray::fromVariantList(ui));
+        }
+    }
+    root[QStringLiteral("historyNodeUi")] = nodeUi;
+    QJsonArray clips = root.value(QStringLiteral("clips")).toArray();
+    for (int ci = 0; ci < clips.size(); ++ci) {
+        QJsonObject clip = clips[ci].toObject();
+        QJsonArray chain = clip.value(QStringLiteral("chain")).toArray();
+        for (int ni = 0; ni < chain.size(); ++ni) {
+            const auto& pass = clip_specs_[ci].chain[ni];
+            QJsonObject node = chain[ni].toObject();
+            node[QStringLiteral("mix")] = double(pass.mix);
+            QJsonArray params = node.value(QStringLiteral("params")).toArray();
+            for (int pi = 0; pi < params.size(); ++pi) {
+                QJsonObject param = params[pi].toObject();
+                param[QStringLiteral("historyMin")] = double(pass.params[pi].min_v);
+                param[QStringLiteral("historyMax")] = double(pass.params[pi].max_v);
+                param[QStringLiteral("historyStep")] = double(pass.params[pi].step);
+                params[pi] = param;
+            }
+            node[QStringLiteral("params")] = params;
+            chain[ni] = node;
+        }
+        clip[QStringLiteral("chain")] = chain;
+        clips[ci] = clip;
+    }
+    root[QStringLiteral("clips")] = clips;
+    root[QStringLiteral("historyMarkersEdited")] = markers_edited_;
+    QJsonArray markers;
+    for (double t : markers_) markers.append(t);
+    root[QStringLiteral("markers")] = markers;
+    return root;
+}
 
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    // Coalesce: a slider drag fires setParam continuously, and one undo step
-    // per pixel would make undo useless. The FIRST pre-state of a run is the
-    // correct restore point, so a repeat of the same tag pushes nothing.
-    if (!undo_.empty() && undo_.back().tag == tag
-        && now - undo_.back().at < kCoalesceMs) {
-        undo_.back().at = now;
+RiftViewport::HistoryEdit::~HistoryEdit() {
+    if (owner) owner->finishUndo_(std::move(before));
+}
+
+RiftViewport::HistoryEdit RiftViewport::pushUndo_(const QString& label, const QString& tag) {
+    if (applying_history_) return { nullptr, {} };
+    return { this, { historyJson_(), label, tag, QDateTime::currentMSecsSinceEpoch() } };
+}
+
+void RiftViewport::finishUndo_(Snapshot before) {
+    const QJsonObject after = historyJson_();
+    if (before.state == after) return;
+    const bool branched = !redo_.empty();
+    clearRedo_();
+    // Empty tags are discrete commands, not a shared coalescing bucket.
+    if (!branched && !before.tag.isEmpty() && !undo_.empty()
+        && undo_.back().tag == before.tag
+        && undo_.back().state.value(QStringLiteral("historyClip"))
+            == before.state.value(QStringLiteral("historyClip"))
+        && undo_.back().state.value(QStringLiteral("historyNode"))
+            == before.state.value(QStringLiteral("historyNode"))
+        && before.at - undo_.back().at >= 0
+        && before.at - undo_.back().at < kCoalesceMs) {
+        undo_.back().at = before.at;
+        if (undo_.back().state == after) undo_.pop_back();
+        emit historyChanged();
         return;
     }
-
-    Snapshot s;
-    s.state = projectJson_(true, QStringLiteral("undo"));
-    s.label = label;
-    s.tag   = tag;
-    s.at    = now;
-    undo_.push_back(std::move(s));
+    undo_.push_back(std::move(before));
     if (undo_.size() > kUndoDepth) undo_.erase(undo_.begin());
-    clearRedo_();                       // a new edit invalidates the redo path
     emit historyChanged();
 }
 
 void RiftViewport::clearRedo_() {
-    if (redo_.empty()) return;
+    if (applying_history_ || redo_.empty()) return;
     redo_.clear();
     emit historyChanged();
 }
@@ -2219,22 +2509,30 @@ void RiftViewport::clearRedo_() {
 void RiftViewport::applySnapshot_(const Snapshot& s) {
     applying_history_ = true;
     applyProjectJson_(s.state);
+    mark_in_ = s.state.value(QStringLiteral("historyMarkIn")).toDouble();
+    mark_out_ = s.state.value(QStringLiteral("historyMarkOut")).toDouble();
+    emit marksChanged();
+    if (s.label == QLatin1String("new project") || s.label == QLatin1String("open project")) {
+        project_path_ = s.state.value(QStringLiteral("historyPath")).toString();
+        project_title_ = s.state.value(QStringLiteral("historyTitle")).toString();
+    }
     applying_history_ = false;
 }
 
 void RiftViewport::undo() {
-    if (undo_.empty()) return;
+    if (applying_history_ || undo_.empty()) return;
 
     // Capture where we are now so redo can come back to it. Uses the popped
     // step's own label, so "undo add node" / "redo add node" read the same.
     Snapshot cur;
-    cur.state = projectJson_(true, QStringLiteral("redo"));
+    cur.state = historyJson_();
     cur.label = undo_.back().label;
     cur.tag   = undo_.back().tag;
     redo_.push_back(std::move(cur));
 
     const Snapshot s = undo_.back();
     undo_.pop_back();
+    if (!undo_.empty()) undo_.back().at = 0;
     applySnapshot_(s);
     last_error_ = QStringLiteral("undo ") + s.label;
     emit historyChanged();
@@ -2242,13 +2540,13 @@ void RiftViewport::undo() {
 }
 
 void RiftViewport::redo() {
-    if (redo_.empty()) return;
+    if (applying_history_ || redo_.empty()) return;
 
     Snapshot cur;
-    cur.state = projectJson_(true, QStringLiteral("undo"));
+    cur.state = historyJson_();
     cur.label = redo_.back().label;
     cur.tag   = redo_.back().tag;
-    cur.at    = QDateTime::currentMSecsSinceEpoch();
+    cur.at    = 0; // A replay is a gesture boundary, never part of the next drag.
     undo_.push_back(std::move(cur));
 
     const Snapshot s = redo_.back();
@@ -2369,7 +2667,7 @@ bool RiftViewport::loadQueue(const QUrl& url) {
 }
 
 void RiftViewport::addKey(int paramIndex) {
-    pushUndo_(QStringLiteral("add key"), QStringLiteral("addKey:%1").arg(paramIndex));
+    const auto history = pushUndo_(QStringLiteral("add key"), QStringLiteral("addKey:%1").arg(paramIndex));
     // Land the key on the beat the playhead is sitting near, so a key set by
     // eye while playing is exactly on the hit rather than a few ms off it.
     const double t = snapTime(playhead_);
@@ -2441,10 +2739,11 @@ QVariantList RiftViewport::keyframes() const {
 }
 
 void RiftViewport::moveKey(int paramIndex, qreal fromTime, qreal toTime) {
-    pushUndo_(QStringLiteral("move key"), QStringLiteral("moveKey:%1").arg(paramIndex));
+    if (applying_history_ || !std::isfinite(fromTime) || !std::isfinite(toTime)) return;
+    const auto history = pushUndo_(QStringLiteral("move key"), QStringLiteral("moveKey:%1").arg(paramIndex));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ >= int(d_->chain.size())) return;
+        if (selected_ < 0 || selected_ >= int(d_->chain.size())) return;
         auto& ps = d_->chain[selected_].params;
         if (paramIndex < 0 || paramIndex >= int(ps.size())) return;
         auto& keys = ps[paramIndex].keys;
@@ -2464,10 +2763,11 @@ void RiftViewport::moveKey(int paramIndex, qreal fromTime, qreal toTime) {
 }
 
 void RiftViewport::addKeyAt(int paramIndex, qreal time, qreal value, int interp) {
-    pushUndo_(QStringLiteral("add key"), QStringLiteral("addKeyAt:%1").arg(paramIndex));
+    if (applying_history_ || !std::isfinite(time) || !std::isfinite(value)) return;
+    const auto history = pushUndo_(QStringLiteral("add key"), QStringLiteral("addKeyAt:%1").arg(paramIndex));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ >= int(d_->chain.size())) return;
+        if (selected_ < 0 || selected_ >= int(d_->chain.size())) return;
         auto& ps = d_->chain[selected_].params;
         if (paramIndex < 0 || paramIndex >= int(ps.size())) return;
         auto& keys = ps[paramIndex].keys;
@@ -2494,10 +2794,10 @@ void RiftViewport::addKeyAt(int paramIndex, qreal time, qreal value, int interp)
 }
 
 void RiftViewport::removeKeyAt(int paramIndex) {
-    pushUndo_(QStringLiteral("remove key"), QStringLiteral("removeKey:%1").arg(paramIndex));
+    const auto history = pushUndo_(QStringLiteral("remove key"), QStringLiteral("removeKey:%1").arg(paramIndex));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ >= int(d_->chain.size())) return;
+        if (selected_ < 0 || selected_ >= int(d_->chain.size())) return;
         auto& ps = d_->chain[selected_].params;
         if (paramIndex < 0 || paramIndex >= int(ps.size())) return;
         auto& keys = ps[paramIndex].keys;
@@ -2512,10 +2812,10 @@ void RiftViewport::removeKeyAt(int paramIndex) {
 }
 
 void RiftViewport::clearKeys(int paramIndex) {
-    pushUndo_(QStringLiteral("clear keys"), QStringLiteral("clearKeys:%1").arg(paramIndex));
+    const auto history = pushUndo_(QStringLiteral("clear keys"), QStringLiteral("clearKeys:%1").arg(paramIndex));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ >= int(d_->chain.size())) return;
+        if (selected_ < 0 || selected_ >= int(d_->chain.size())) return;
         auto& ps = d_->chain[selected_].params;
         if (paramIndex < 0 || paramIndex >= int(ps.size())) return;
         ps[paramIndex].keys.clear();
@@ -2527,10 +2827,10 @@ void RiftViewport::clearKeys(int paramIndex) {
 }
 
 void RiftViewport::cycleKeyInterp(int paramIndex) {
-    pushUndo_(QStringLiteral("key interp"), QStringLiteral("keyInterp:%1").arg(paramIndex));
+    const auto history = pushUndo_(QStringLiteral("key interp"), QStringLiteral("keyInterp:%1").arg(paramIndex));
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ >= int(d_->chain.size())) return;
+        if (selected_ < 0 || selected_ >= int(d_->chain.size())) return;
         auto& ps = d_->chain[selected_].params;
         if (paramIndex < 0 || paramIndex >= int(ps.size())) return;
         auto& keys = ps[paramIndex].keys;
@@ -2545,7 +2845,7 @@ void RiftViewport::cycleKeyInterp(int paramIndex) {
 }
 
 void RiftViewport::resetParams() {
-    pushUndo_(QStringLiteral("reset params"), QStringLiteral("resetParams"));
+    const auto history = pushUndo_(QStringLiteral("reset params"), QStringLiteral("resetParams"));
     for (int i = 0; i < params_ui_.size(); ++i) {
         QVariantMap m = params_ui_.at(i).toMap();
         m[QStringLiteral("value")] = m.value(QStringLiteral("default"));
@@ -2553,7 +2853,7 @@ void RiftViewport::resetParams() {
     }
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        if (selected_ < int(d_->chain.size())) {
+        if (selected_ >= 0 && selected_ < int(d_->chain.size())) {
             auto& ps = d_->chain[selected_].params;
             for (int i = 0; i < int(ps.size()) && i < params_ui_.size(); ++i)
                 ps[i].value = float(params_ui_.at(i).toMap()
@@ -2562,6 +2862,7 @@ void RiftViewport::resetParams() {
         }
         d_->params_dirty = true;
     }
+    syncChainToClip_();
     emit paramsChanged();
     update();
 }
@@ -2571,10 +2872,10 @@ void RiftViewport::initVisualizerStyles_() {
     {
         QJsonObject o;
         o[QStringLiteral("mode")] = QStringLiteral("gradient");
-        o[QStringLiteral("solid")] = QStringLiteral("#00ffffff");
+        o[QStringLiteral("solid")] = QStringLiteral("#ff63d8ff");
         QJsonArray stops;
-        QJsonObject s0; s0[QStringLiteral("position")] = 0.0; s0[QStringLiteral("color")] = QStringLiteral("#00ffffff");
-        QJsonObject s1; s1[QStringLiteral("position")] = 1.0; s1[QStringLiteral("color")] = QStringLiteral("#ffffffff");
+        QJsonObject s0; s0[QStringLiteral("position")] = 0.0; s0[QStringLiteral("color")] = QStringLiteral("#0027c6d8");
+        QJsonObject s1; s1[QStringLiteral("position")] = 1.0; s1[QStringLiteral("color")] = QStringLiteral("#ff63d8ff");
         stops.append(s0); stops.append(s1);
         o[QStringLiteral("stops")] = stops;
         o[QStringLiteral("mapping")] = QStringLiteral("horizontal");
@@ -2631,7 +2932,7 @@ void RiftViewport::initVisualizerStyles_() {
     }
 }
 
-void RiftViewport::bakeAndUploadLut_(int visIndex) {
+void RiftViewport::bakeAndUploadLut_(int visIndex, bool exportOnly) {
     if (visIndex < 0 || visIndex >= 4) return;
     const QJsonObject& style = vis_color_styles_[visIndex];
     uint32_t lineLut[256];
@@ -2697,10 +2998,13 @@ void RiftViewport::bakeAndUploadLut_(int visIndex) {
         glowPtr = glowLut;
     }
 
-    if (d_->engine && d_->engine->rhiContext()) {
-        d_->engine->rhiContext()->uploadLut(visIndex, lineLut, glowPtr);
-    }
-    if (d_->export_engine && d_->export_engine->rhiContext()) {
+    if (!exportOnly) {
+        std::lock_guard<std::mutex> lk(d_->lut_mu);
+        auto& pending = d_->pending_luts[visIndex];
+        std::copy_n(lineLut, 256, pending.line.begin());
+        std::copy_n(glowPtr ? glowPtr : lineLut, 256, pending.glow.begin());
+        pending.dirty = true;
+    } else if (d_->export_engine && d_->export_engine->rhiContext()) {
         d_->export_engine->rhiContext()->uploadLut(visIndex, lineLut, glowPtr);
     }
 }
@@ -2854,6 +3158,7 @@ void RiftViewport::onSceneGraphInvalidated() {
 // Replaces the track with a single clip - "open this file" rather than "add".
 void RiftViewport::loadMedia(const QUrl& url) {
     const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    selectClip(-1);
     clip_specs_.clear();
     rift::ClipSpec lc;
     lc.path = path.toStdString();
@@ -2863,6 +3168,7 @@ void RiftViewport::loadMedia(const QUrl& url) {
     media_name_ = QFileInfo(path).fileName();
     has_media_ = true;
     pushClips_();
+    selectClip(0);
     emit sourceChanged();
     update();
 }
@@ -2877,7 +3183,7 @@ void RiftViewport::addClip(const QUrl& url, int lane) {
         emit projectChanged();
         return;
     }
-    pushUndo_(QStringLiteral("add clip"), QStringLiteral("addClip"));
+    const auto history = pushUndo_(QStringLiteral("add clip"), QString());
     // start < 0 = "append after the previous clip IN THIS LANE". The UI cannot
     // compute this itself: a clip's length is unknown until its source opens,
     // so letting the timeline resolve it is what stops clips stacking at 0.
@@ -2903,28 +3209,37 @@ void RiftViewport::addClip(const QUrl& url, int lane) {
     if (media_name_.isEmpty()) media_name_ = QFileInfo(path).fileName();
     has_media_ = true;
     pushClips_();
+    if (edited_clip_ < 0) selectClip(int(clip_specs_.size()) - 1);
     emit sourceChanged();
     update();
 }
 
 void RiftViewport::removeClip(int index) {
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("remove clip"), QStringLiteral("removeClip"));
-    // edited_clip_ is an index into this vector. Erasing shifts everything
-    // above it down, and syncChainToClip_ would then write the rail's chain
-    // into whichever clip slid into the slot - silently replacing an unrelated
-    // clip's effect stack. Deleting the clip being edited goes back to the
-    // shared view first, which also un-parks the shared chain.
+    const auto history = pushUndo_(QStringLiteral("remove clip"), QString());
+    // Deselect before erasing so the current chain cannot be written into the
+    // clip that shifts into its index.
     if (edited_clip_ == index) selectClip(-1);
     else if (edited_clip_ > index) --edited_clip_;
     clip_specs_.erase(clip_specs_.begin() + index);
+    has_media_ = !clip_specs_.empty();
+    if (!has_media_) {
+        media_name_.clear();
+        d_->pending_media_path.clear();
+    }
+    if (edited_clip_ < 0 && !clip_specs_.empty())
+        selectClip(std::min(index, int(clip_specs_.size()) - 1));
     pushClips_();
+    emit sourceChanged();
     update();
 }
 
 void RiftViewport::setClipLane(int index, int lane) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("clip lane"), QStringLiteral("clipLane:%1").arg(index));
+    lane = std::max(0, lane);
+    if (clip_specs_[index].lane == lane) return;
+    const auto history = pushUndo_(QStringLiteral("clip lane"), QStringLiteral("clipLane:%1").arg(index));
     clip_specs_[index].lane = std::max(0, lane);
     // Pin the current position, otherwise a clip that was auto-appended would
     // jump to the end of its new lane the moment it moves.
@@ -2935,8 +3250,9 @@ void RiftViewport::setClipLane(int index, int lane) {
 }
 
 void RiftViewport::setClipBlend(int index, int blend, qreal opacity) {
+    if (applying_history_ || !std::isfinite(opacity)) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("clip blend"), QStringLiteral("clipBlend:%1").arg(index));
+    const auto history = pushUndo_(QStringLiteral("clip blend"), QStringLiteral("clipBlend:%1").arg(index));
     clip_specs_[index].blend   = qBound(0, blend, int(rift::Blend_Count) - 1);
     clip_specs_[index].opacity = qBound(0.0, double(opacity), 1.0);
     pushClips_();
@@ -2944,8 +3260,9 @@ void RiftViewport::setClipBlend(int index, int blend, qreal opacity) {
 }
 
 void RiftViewport::setClipTransform(int index, qreal x, qreal y, qreal scale) {
+    if (applying_history_ || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(scale)) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("clip transform"), QStringLiteral("clipXf:%1").arg(index));
+    const auto history = pushUndo_(QStringLiteral("clip transform"), QStringLiteral("clipXf:%1").arg(index));
     clip_specs_[index].posX  = qBound(-2.0, double(x), 2.0);
     clip_specs_[index].posY  = qBound(-2.0, double(y), 2.0);
     clip_specs_[index].scale = qBound(0.05, double(scale), 4.0);
@@ -2958,8 +3275,10 @@ void RiftViewport::setClipTransform(int index, qreal x, qreal y, qreal scale) {
 // it. Zero width or height would make the clip invisible with no way back from
 // the UI, so both are floored.
 void RiftViewport::setClipCrop(int index, qreal x, qreal y, qreal w, qreal h) {
+    if (applying_history_ || !std::isfinite(x) || !std::isfinite(y)
+        || !std::isfinite(w) || !std::isfinite(h)) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("clip crop"), QStringLiteral("clipCrop:%1").arg(index));
+    const auto history = pushUndo_(QStringLiteral("clip crop"), QStringLiteral("clipCrop:%1").arg(index));
     rift::ClipSpec& c = clip_specs_[index];
     c.cropX = qBound(0.0, double(x), 1.0);
     c.cropY = qBound(0.0, double(y), 1.0);
@@ -2969,7 +3288,7 @@ void RiftViewport::setClipCrop(int index, qreal x, qreal y, qreal w, qreal h) {
     update();
 }
 
-// Point the chain rail + params panel at a clip's own stack, or back at the master chain (-1).
+// Point the chain rail and params panel at a clip's effects.
 void RiftViewport::selectClip(int index) {
     const int target = (index >= 0 && index < int(clip_specs_.size())) ? index : -1;
     if (target == edited_clip_) return;
@@ -2979,40 +3298,21 @@ void RiftViewport::selectClip(int index) {
         syncChainToClip_();
     }
 
-    if (target >= 0) {
-        // Park the shared master chain if not already parked
-        if (!d_->shared_parked) {
-            std::lock_guard<std::mutex> lk(d_->params_mu);
-            d_->shared_chain = d_->chain;
-            d_->shared_parked = true;
-        }
-        edited_clip_ = target;
-
-        // Load target clip's chain into d_->chain (empty if clip has no passes)
-        {
-            std::lock_guard<std::mutex> lk(d_->params_mu);
-            d_->chain.clear();
+    edited_clip_ = target;
+    {
+        std::lock_guard<std::mutex> lk(d_->params_mu);
+        d_->chain.clear();
+        if (target >= 0) {
             const auto& clipChain = clip_specs_[target].chain;
             for (const auto& pass : clipChain) {
                 d_->chain.push_back({ QString::fromStdString(pass.shader),
                                       pass.params, {}, 0, pass.blend, pass.mix });
             }
-            selected_ = d_->chain.empty() ? -1 : 0;
         }
-        for (int i = 0; i < int(d_->chain.size()); ++i) loadManifest_(i);
-    } else {
-        // Deselect clip: restore shared master chain
-        edited_clip_ = -1;
-        if (d_->shared_parked) {
-            std::lock_guard<std::mutex> lk(d_->params_mu);
-            d_->chain = d_->shared_chain;
-            d_->shared_chain.clear();
-            d_->shared_parked = false;
-            selected_ = d_->chain.empty() ? -1 : 0;
-            d_->chain_dirty = true;
-        }
-        for (int i = 0; i < int(d_->chain.size()); ++i) loadManifest_(i);
+        selected_ = d_->chain.empty() ? -1 : 0;
     }
+    if (!applying_history_)
+        for (int i = 0; i < int(d_->chain.size()); ++i) loadManifest_(i);
 
     publishParams_();
     emit chainChanged();
@@ -3038,7 +3338,7 @@ void RiftViewport::syncChainToClip_() {
 
 void RiftViewport::duplicateClip(int index) {
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("duplicate clip"), QString());
+    const auto history = pushUndo_(QStringLiteral("duplicate clip"), QString());
 
     // Copy everything: source, trim, blend, transform and the per-clip chain.
     rift::ClipSpec copy = clip_specs_[index];
@@ -3053,6 +3353,7 @@ void RiftViewport::duplicateClip(int index) {
 }
 
 void RiftViewport::splitClip(int index, qreal t) {
+    if (applying_history_ || !std::isfinite(t)) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
     if (!d_->engine) return;
 
@@ -3064,7 +3365,7 @@ void RiftViewport::splitClip(int index, qreal t) {
         last_error_ = QStringLiteral("playhead is not inside the clip");
         return;
     }
-    pushUndo_(QStringLiteral("split clip"), QString());
+    const auto history = pushUndo_(QStringLiteral("split clip"), QString());
 
     const double cut = t - start;              // seconds into the clip
     rift::ClipSpec& a = clip_specs_[index];
@@ -3093,8 +3394,9 @@ void RiftViewport::copyClip(int index) {
 }
 
 void RiftViewport::pasteClip(qreal at, int lane) {
+    if (applying_history_ || !std::isfinite(at)) return;
     if (!clipboard_valid_) return;
-    pushUndo_(QStringLiteral("paste clip"), QString());
+    const auto history = pushUndo_(QStringLiteral("paste clip"), QString());
 
     rift::ClipSpec c = clipboard_;
     c.start = std::max(0.0, double(at));
@@ -3115,7 +3417,7 @@ void RiftViewport::fillTrack(int index) {
         last_error_ = QStringLiteral("nothing to fill against yet");
         return;
     }
-    pushUndo_(QStringLiteral("fill track"), QString());
+    const auto history = pushUndo_(QStringLiteral("fill track"), QString());
 
     rift::ClipSpec& c = clip_specs_[index];
     c.start = 0.0;
@@ -3128,19 +3430,43 @@ void RiftViewport::fillTrack(int index) {
 }
 
 void RiftViewport::setClipStart(int index, qreal start) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("move clip"),
+    if (!std::isfinite(start)) return;
+    start = std::max(0.0, double(snapTime(start)));
+    const double oldStart = clip_specs_[index].start >= 0.0 ? clip_specs_[index].start
+        : (d_->engine ? d_->engine->clipStart(index) : clip_specs_[index].start);
+    if (oldStart == start) return;
+    const auto history = pushUndo_(QStringLiteral("move clip"),
               QStringLiteral("clipStart:%1").arg(index));
     // Snap the clip's START to a beat - the edit users actually want on a
     // music-driven timeline. A no-op when snapping is off or nothing is close.
-    clip_specs_[index].start = std::max(0.0, double(snapTime(start)));
+    clip_specs_[index].start = start;
+    pushClips_();
+    update();
+}
+
+void RiftViewport::moveClip(int index, qreal start, int lane) {
+    if (applying_history_ || index < 0 || index >= int(clip_specs_.size())
+        || !std::isfinite(start)) return;
+    start = std::max(0.0, double(snapTime(start)));
+    lane = std::max(0, lane);
+    auto& clip = clip_specs_[index];
+    const double oldStart = clip.start >= 0.0 ? clip.start
+        : (d_->engine ? d_->engine->clipStart(index) : clip.start);
+    if (oldStart == start && clip.lane == lane) return;
+    const auto history = pushUndo_(QStringLiteral("move clip"), QString());
+    clip.start = start;
+    clip.lane = lane;
     pushClips_();
     update();
 }
 
 void RiftViewport::setClipTrim(int index, qreal in, qreal out) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("trim clip"),
+    if (!std::isfinite(in) || !std::isfinite(out)) return;
+    const auto history = pushUndo_(QStringLiteral("trim clip"),
               QStringLiteral("clipTrim:%1").arg(index));
 
     // in/out are positions INSIDE the source, but markers are timeline times.
@@ -3188,7 +3514,7 @@ void RiftViewport::setClipTrim(int index, qreal in, qreal out) {
 void RiftViewport::addAudioClip(const QUrl& url, int lane, int link) {
     const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
     if (path.isEmpty()) return;
-    pushUndo_(QStringLiteral("add audio"), QStringLiteral("addAudioClip"));
+    const auto history = pushUndo_(QStringLiteral("add audio"), QString());
 
     rift::AudioClipSpec a;
     a.path   = path.toStdString();
@@ -3206,24 +3532,54 @@ void RiftViewport::addAudioClip(const QUrl& url, int lane, int link) {
 
 void RiftViewport::removeAudioClip(int index) {
     if (index < 0 || index >= int(audio_clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("remove audio"), QStringLiteral("removeAudio"));
+    const auto history = pushUndo_(QStringLiteral("remove audio"), QString());
     audio_clip_specs_.erase(audio_clip_specs_.begin() + index);
+    has_audio_ = !audio_clip_specs_.empty();
+    if (!has_audio_) {
+        d_->pending_audio_path.clear();
+        d_->pending_analysis_path.clear();
+    }
     pushAudioClips_();
+    emit sourceChanged();
     update();
 }
 
 void RiftViewport::setAudioClipStart(int index, qreal start) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(audio_clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("move audio"),
+    if (!std::isfinite(start)) return;
+    start = std::max(0.0, double(start));
+    const double oldStart = audio_clip_specs_[index].start >= 0.0 ? audio_clip_specs_[index].start
+        : (d_->engine ? d_->engine->audioClipStart(index) : audio_clip_specs_[index].start);
+    if (oldStart == start) return;
+    const auto history = pushUndo_(QStringLiteral("move audio"),
               QStringLiteral("audioStart:%1").arg(index));
-    audio_clip_specs_[index].start = std::max(0.0, double(start));
+    audio_clip_specs_[index].start = start;
+    pushAudioClips_();
+    update();
+}
+
+void RiftViewport::moveAudioClip(int index, qreal start, int lane) {
+    if (applying_history_ || index < 0 || index >= int(audio_clip_specs_.size())
+        || !std::isfinite(start)) return;
+    start = std::max(0.0, double(start));
+    lane = std::max(0, lane);
+    auto& clip = audio_clip_specs_[index];
+    const double oldStart = clip.start >= 0.0 ? clip.start
+        : (d_->engine ? d_->engine->audioClipStart(index) : clip.start);
+    if (oldStart == start && clip.lane == lane) return;
+    const auto history = pushUndo_(QStringLiteral("move audio"), QString());
+    clip.start = start;
+    clip.lane = lane;
     pushAudioClips_();
     update();
 }
 
 void RiftViewport::setAudioClipTrim(int index, qreal in, qreal out) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(audio_clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("trim audio"),
+    if (!std::isfinite(in) || !std::isfinite(out)) return;
+    const auto history = pushUndo_(QStringLiteral("trim audio"),
               QStringLiteral("audioTrim:%1").arg(index));
 
     rift::AudioClipSpec& a = audio_clip_specs_[index];
@@ -3246,8 +3602,11 @@ void RiftViewport::setAudioClipTrim(int index, qreal in, qreal out) {
 }
 
 void RiftViewport::setAudioClipLane(int index, int lane) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(audio_clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("audio lane"), QStringLiteral("audioLane:%1").arg(index));
+    lane = std::max(0, lane);
+    if (audio_clip_specs_[index].lane == lane) return;
+    const auto history = pushUndo_(QStringLiteral("audio lane"), QStringLiteral("audioLane:%1").arg(index));
     audio_clip_specs_[index].lane = std::max(0, lane);
     if (audio_clip_specs_[index].start < 0.0 && d_->engine)
         audio_clip_specs_[index].start =
@@ -3257,8 +3616,12 @@ void RiftViewport::setAudioClipLane(int index, int lane) {
 }
 
 void RiftViewport::setAudioClipGain(int index, qreal gain) {
+    if (applying_history_) return;
     if (index < 0 || index >= int(audio_clip_specs_.size())) return;
-    pushUndo_(QStringLiteral("audio gain"),
+    if (!std::isfinite(gain)) return;
+    gain = qBound(0.0, double(gain), 2.0);
+    if (audio_clip_specs_[index].gain == gain) return;
+    const auto history = pushUndo_(QStringLiteral("audio gain"),
               QStringLiteral("audioGain:%1").arg(index));
     // Linear internally; the UI shows dB. Gain does not change placement, so
     // no structural re-push is needed for the layout - but it does change the
@@ -3269,6 +3632,7 @@ void RiftViewport::setAudioClipGain(int index, qreal gain) {
 }
 
 void RiftViewport::splitAudioClip(int index, qreal t) {
+    if (applying_history_ || !std::isfinite(t)) return;
     if (index < 0 || index >= int(audio_clip_specs_.size())) return;
     if (!d_->engine) return;
 
@@ -3278,7 +3642,7 @@ void RiftViewport::splitAudioClip(int index, qreal t) {
         last_error_ = QStringLiteral("playhead is not inside the clip");
         return;
     }
-    pushUndo_(QStringLiteral("split audio"), QString());
+    const auto history = pushUndo_(QStringLiteral("split audio"), QString());
 
     const double cut = t - start;
     rift::AudioClipSpec& a = audio_clip_specs_[index];
@@ -3369,8 +3733,12 @@ void RiftViewport::pushClips_() {
 }
 
 void RiftViewport::pushAudioClips_() {
-    if (d_->engine) d_->engine->setAudioClips(audio_clip_specs_);
+    if (d_->engine) d_->engine->setAudioClips(audio_clip_specs_,
+                                            d_->pending_analysis_path.toStdString());
+    publishAudioClips_();
+}
 
+void RiftViewport::publishAudioClips_() {
     audio_clips_ui_.clear();
     for (int i = 0; i < int(audio_clip_specs_.size()); ++i) {
         const auto& c = audio_clip_specs_[i];
@@ -3389,6 +3757,16 @@ void RiftViewport::pushAudioClips_() {
             d_->engine ? d_->engine->audioClipStart(i) : c.start;
         m[QStringLiteral("span")]  =
             d_->engine ? d_->engine->audioClipSpan(i) : 0.0;
+        QVariantList peaks;
+        double sourceDuration = 0.0;
+        const auto source = d_->engine ? d_->engine->audioClipWaveform(i) : nullptr;
+        if (source && source->path == c.path) {
+            peaks.reserve(int(source->peaks.size()));
+            for (float peak : source->peaks) peaks.append(double(peak));
+            sourceDuration = source->duration;
+        }
+        m[QStringLiteral("waveform")] = peaks;
+        m[QStringLiteral("sourceDuration")] = sourceDuration;
         audio_clips_ui_.append(m);
     }
     audio_lane_count_ = d_->engine ? d_->engine->audioLaneCount() : 1;
@@ -3418,6 +3796,7 @@ void RiftViewport::loadAudio(const QUrl& audioUrl, const QUrl& analysisUrl) {
     update();
 }
 void RiftViewport::play() {
+    if (sequence_duration_ > 0.0 && playhead_ >= sequence_duration_) seek(0.0);
     if (d_->engine) d_->engine->play();
     playing_ = true;  emit transportChanged(); update();
 }
@@ -3453,6 +3832,11 @@ void RiftViewport::pollEngine_() {
     if (!d_->engine) return;
 
     const double ph = d_->engine->playhead();
+    if (sequence_duration_ > 0.0 && playing_ && ph >= sequence_duration_) {
+        pause();
+        seek(sequence_duration_);
+        return;
+    }
     if (!qFuzzyCompare(ph + 1.0, playhead_ + 1.0)) {
         playhead_ = ph;
         emit transportChanged();
@@ -3505,7 +3889,7 @@ void RiftViewport::pollEngine_() {
         // Only rebuild the model if the clips actually MOVED. The total length
         // changes while a decoder is still resolving a span, and rebuilding
         if (!clip_dragging_ && clipLayoutMoved_()) pushClips_();
-        if (audioClipLayoutMoved_()) pushAudioClips_();
+        if (audioClipLayoutMoved_()) publishAudioClips_();
     }
     const int ac = d_->engine->activeClip();
     if (ac != active_clip_) { active_clip_ = ac; emit transportChanged(); }
@@ -3513,7 +3897,7 @@ void RiftViewport::pollEngine_() {
     if (lc != lane_count_) { lane_count_ = lc; emit clipsChanged(); }
     const int alc = d_->engine->audioLaneCount();
     if (alc != audio_lane_count_) { audio_lane_count_ = alc; emit clipsChanged(); }
-    if (audioClipLayoutMoved_()) pushAudioClips_();
+    if (audioClipLayoutMoved_()) publishAudioClips_();
 
     // Waveform appears once the audio finishes loading, so poll until it does
     // rather than assuming it is ready at load time.
@@ -3526,6 +3910,7 @@ void RiftViewport::pollEngine_() {
     const uint32_t gen = d_->engine->audioDataGeneration();
     if (gen != audio_gen_) {
         audio_gen_ = gen;
+        publishAudioClips_();
         const std::vector<float> wf = d_->engine->waveform();
         wave_ui_.clear();
         wave_ui_.reserve(int(wf.size()));
@@ -3584,6 +3969,7 @@ void RiftViewport::ensureEngine_() {
         d_->engine.reset();
         return;
     }
+    d_->engine->setSequenceDuration(sequence_duration_);
 
     // Replay anything the UI asked for before the Engine existed.
     if (!d_->replayed) {
@@ -3609,39 +3995,30 @@ void RiftViewport::onBeforeRendering() {
     RVTRACE("ensureEngine done");
     if (d_->failed || !d_->engine) return;
 
+    std::array<Priv::LutUpdate, 4> pending;
+    {
+        std::lock_guard<std::mutex> lk(d_->lut_mu);
+        for (int i = 0; i < 4; ++i) {
+            pending[i] = d_->pending_luts[i];
+            d_->pending_luts[i].dirty = false;
+        }
+    }
+    for (int i = 0; i < 4; ++i)
+        if (pending[i].dirty)
+            d_->engine->rhiContext()->uploadLut(i, pending[i].line.data(),
+                                                 pending[i].glow.data());
+
     {
         std::lock_guard<std::mutex> lk(d_->params_mu);
-        const auto& master = (edited_clip_ >= 0 && d_->shared_parked)
-                           ? d_->shared_chain : d_->chain;
-
         if (d_->chain_dirty) {
             RVTRACE("chain rebuild begin");
             auto& g = d_->engine->graph();
             g.clear();
-            // source -> fx0 -> fx1 -> ... in list order: each node reads the
-            // previous node's output, so the list IS the render order.
-            uint32_t prev = g.addSource();
-            for (const auto& n : master) {
-                uint32_t gid = g.addEffect(n.effect.toStdString());
-                g.connect(prev, gid);
-                if (!n.params.empty()) g.setParams(gid, n.params);
-                g.setBlend(gid, n.blend, n.mix);
-                if (qEnvironmentVariableIsSet("RIFT_UI_DBG"))
-                    fprintf(stderr, "[chain] %s gid=%u prev=%u params=%zu\n",
-                            qPrintable(n.effect), gid, prev, n.params.size()),
-                    fflush(stderr);
-                prev = gid;
-            }
-            // Structural change: pipelines must be recompiled before execute().
+            g.addSource();
             g.build(*d_->engine->rhiContext());
             d_->chain_dirty = false;
             d_->params_dirty = false;
             RVTRACE("chain rebuild done");
-        } else if (d_->params_dirty && edited_clip_ < 0) {
-            for (auto& n : d_->chain)
-                if (n.gid && !n.params.empty())
-                    d_->engine->graph().setParams(n.gid, n.params);
-            d_->params_dirty = false;
         }
     }
 

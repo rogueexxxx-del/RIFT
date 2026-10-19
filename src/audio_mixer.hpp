@@ -52,6 +52,14 @@ public:
     double clipStart(int i) const;            // resolved timeline seconds
     double clipSpan(int i) const;             // placed span, seconds
 
+    struct SourceWaveform {
+        std::string path;
+        std::vector<float> peaks; // max absolute stereo sample, uniform source-time buckets
+        double duration = 0.0;   // full source seconds, before placement, trim or gain
+    };
+    // Immutable cached source data; safe to retain across clip edits, no PCM copy.
+    std::shared_ptr<const SourceWaveform> clipWaveform(int index) const;
+
     // ── audio thread ──
     // Fill `out` (interleaved stereo, kMixRate) from the mix. No locks, no
     // decode. Silence while stopped. Wraps at duration() when looping.

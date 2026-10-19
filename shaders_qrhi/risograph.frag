@@ -64,7 +64,9 @@ float screen_pass(vec2 uv, float amount, float angle, float cell) {
     // dots grow with ink amount instead of just getting denser.
     float d = length(fract(g) - 0.5) * 1.4142;
     float rough = (hash21(floor(g)) - 0.5) * roughness * 0.35;
-    return step(d + rough, sqrt(clamp(amount, 0.0, 1.0)));
+    float radius = sqrt(clamp(amount, 0.0, 1.0));
+    float aa = max(fwidth(d), 0.0005);
+    return 1.0 - smoothstep(radius - aa, radius + aa, d + rough);
 }
 
 void main() {

@@ -10,6 +10,7 @@
 param(
     [switch]$Installer,
     [switch]$Zip,
+
     [string]$FfmpegDir = "D:/download/ffmpeg-master-latest-win64-lgpl-shared/ffmpeg-master-latest-win64-lgpl-shared",
     # Without the vcpkg toolchain CMake cannot see Qt at all and configure dies
     # on find_package(Qt6). build-full gets it from its cached CMakeCache; a
@@ -21,13 +22,20 @@ param(
 $ErrorActionPreference = "Stop"
 $CM    = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $root  = Split-Path -Parent $PSScriptRoot
+$versionMatch = [regex]::Match((Get-Content (Join-Path $root "CMakeLists.txt") -Raw),
+    'project\(rift_engine LANGUAGES CXX VERSION ([0-9]+\.[0-9]+\.[0-9]+)\)')
+if (-not $versionMatch.Success) { throw "Cannot read the project version" }
+$version = $versionMatch.Groups[1].Value
 $build = Join-Path $root "build-release"
-$dist  = Join-Path $root "dist"
+$dist  = Join-Path $root "dist-$version"
 
 # A running instance holds the DLLs the build is about to overwrite, and MSVC
 # reports that as a confusing LNK1168 rather than "the app is open".
-Get-Process | Where-Object { $_.ProcessName -like "*rift*" } |
-    ForEach-Object { try { $_.Kill() } catch {} }
+$targetExe = Join-Path $build "Release\rift_shell.exe"
+if (Get-Process -Name rift_shell -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -eq $targetExe }) {
+    throw "Close $targetExe before building. Other RIFT sessions will not be stopped."
+}
 
 Write-Host "=== configure (Release) ===" -ForegroundColor Cyan
 if (-not (Test-Path $VcpkgToolchain)) { throw "vcpkg toolchain not at $VcpkgToolchain" }
@@ -186,7 +194,7 @@ $clean = @{
 }
 $psi = New-Object Diagnostics.ProcessStartInfo
 $psi.FileName = Join-Path $dist "rift_shell.exe"
-$psi.Arguments = '--chain ascii --export "' + $probe + '"'
+$psi.Arguments = '--text "RIFT|0|2" --chain ascii --export "' + $probe + '"'
 $psi.WorkingDirectory = $dist
 $psi.UseShellExecute = $false
 $psi.RedirectStandardError = $true
@@ -230,8 +238,7 @@ if ($Zip) {
     # unpack and run. Same staged folder the installer packages.
     # NOT $zip: that is the -Zip switch parameter, and assigning a string to a
     # [switch] throws a type-conversion error.
-    $zipPath = Join-Path $root ("RIFT-portable-" +
-                                (Get-Date -Format "yyyyMMdd") + ".zip")
+    $zipPath = Join-Path $root "RIFT-$version-windows-x64.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Compress-Archive -Path "$dist\*" -DestinationPath $zipPath -CompressionLevel Optimal
     "portable zip: {0}  ({1:N1} MB)" -f $zipPath, ((Get-Item $zipPath).Length / 1MB)
@@ -243,14 +250,16 @@ if ($Installer) {
     # so check LOCALAPPDATA too before giving up.
     $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
     foreach ($cand in @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+                        "$env:USERPROFILE\AppData\Local\Programs\Inno Setup 6\ISCC.exe",
                         "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
                         "$env:ProgramFiles\Inno Setup 6\ISCC.exe")) {
         if (-not $iscc -and (Test-Path $cand)) { $iscc = $cand }
     }
-    if (-not (Test-Path $iscc)) {
+    if (-not $iscc -or -not (Test-Path $iscc)) {
         Write-Warning "Inno Setup not found - skipping. Get it from jrsoftware.org."
     } else {
         & $iscc "/DStageDir=$dist" (Join-Path $PSScriptRoot "rift.iss")
+        if ($LASTEXITCODE -ne 0) { throw "installer compilation failed" }
     }
 }
 

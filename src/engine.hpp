@@ -23,6 +23,7 @@
 #include "timeline.hpp"
 #include "layer_stack.hpp"
 #include "channel_ring.hpp"
+#include "audio_mixer.hpp"
 #include "rift/rift_types.h"
 
 namespace rift {
@@ -37,7 +38,9 @@ class MediaDecoder;   // libav, P2
 
 class Engine {
 public:
-    Engine(void* native_window, std::string shaders_dir, std::string cache_dir);
+    Engine(void* native_window, std::string shaders_dir, std::string cache_dir,
+           bool start_thread = true);
+    void startRenderThread();
     // P4 external-render mode. Qt Quick owns the QRhi and its own render
     // thread, so the engine must NOT start one or create a swapchain - two
     // threads cannot drive one device. `rhi` is a QRhi* borrowed from
@@ -59,6 +62,7 @@ public:
     // Declarative track description. Queued and applied on the render thread;
     // decoders for unchanged sources are reused, so drag/trim does not reopen.
     void   setClips(const std::vector<ClipSpec>& clips);
+    void   setSequenceDuration(double seconds) { sequence_duration_.store(seconds); }
     double timelineDuration() const;
     // Length of the loaded audio, 0 when there is none. The piece is as long as
     // the music, so this is what a clip should be filled against.
@@ -81,6 +85,7 @@ public:
     int    audioLaneCount() const;
     double audioClipStart(int i) const;   // resolved placement, for the UI
     double audioClipSpan(int i) const;
+    std::shared_ptr<const AudioMixer::SourceWaveform> audioClipWaveform(int i) const;
     bool audioReady() const;
     void play();  void pause();  void seek(double s);
     double playhead() const;
@@ -138,7 +143,8 @@ private:
     // composite them bottom lane upward. Returns the final texture, or 0 when
     // nothing is on screen. Falls back to the shared graph for a single
     // un-chained clip so the simple case costs no extra passes.
-    TexId renderLayers_(const rift_channel_frame& cf, double t, int w, int h);
+    TexId renderLayers_(const rift_channel_frame& cf, double t, int w, int h,
+                        double* media_ms = nullptr);
     // Source texture for an empty track. Preview and export MUST agree here:
     // the export used to hand the chain texture 0, which drawPass binds to the
     // 1x1 black dummy, so every shader that samples u_tex (tunnel, lens,
@@ -146,6 +152,7 @@ private:
     // working. Render thread only - it uploads.
     TexId emptySource_();
     TexId placeholder_ = 0;
+    TexId black_source_ = 0;
 
     void renderLoop_();          // render thread body
     void runExport_();           // offscreen render+encode, on the render thread
@@ -216,6 +223,7 @@ public:
 private:
     std::atomic<float> slope_db_per_oct_{3.0f};
     std::atomic<int>   preview_scale_{1};
+    std::atomic<double> sequence_duration_{0.0};
     std::atomic<bool>  exporting_{false};
 
     // Export request (owned copy of the spec + its strings; consumed on the

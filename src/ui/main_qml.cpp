@@ -53,16 +53,16 @@ int main(int argc, char** argv) {
             QFontDatabase::addApplicationFont(fontDir.filePath(f));
     }
 
-    // Set Geist with subpixel antialiasing and native DirectWrite hinting
-    QFont appFont(QStringLiteral("Geist"), 10);
+    // Use the Windows UI face with native DirectWrite hinting.
+    QFont appFont(QStringLiteral("Segoe UI Variable"));
+    appFont.setPixelSize(14);
     appFont.setStyleHint(QFont::SansSerif, QFont::PreferAntialias);
     appFont.setHintingPreference(QFont::PreferFullHinting);
     app.setFont(appFont);
 
-    // Basic, not the native Windows style: the shell is fully themed, the
-    // native style fights it visually, and its PNG-based indicators need an
-    // image plugin that is not deployed (menu arrows/checkmarks fail to decode).
-    QQuickStyle::setStyle(QStringLiteral("Basic"));
+    // Keep an explicit override available for isolated component tests.
+    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
+        QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
 
     QQmlApplicationEngine engine;
     engine.addImportPath(app.applicationDirPath() + QStringLiteral("/qml"));
@@ -76,6 +76,7 @@ int main(int argc, char** argv) {
     // Shader dir is a build-time path for now; project loading supplies it later.
     // --media / --audio preload straight into a file, skipping the dialogs.
     QString initialMedia, initialAudio, initialAnalysis, initialExport, initialChain;
+    int initialExportWidth = 1920, initialExportHeight = 1080;
     QString initialSave, initialOpen;      // --save / --open project files
     QString initialSavePreset;             // --savepreset NAME: save look, quit
     QVariantList initialParams;          // --param INDEX=VALUE (repeatable)
@@ -95,6 +96,18 @@ int main(int argc, char** argv) {
         else if (args[i] == QLatin1String("--audio")) initialAudio = args[i + 1];
         else if (args[i] == QLatin1String("--analysis")) initialAnalysis = args[i + 1];
         else if (args[i] == QLatin1String("--export")) initialExport = args[i + 1];
+        else if (args[i] == QLatin1String("--export-width")) {
+            bool valid = false;
+            const int width = args[i + 1].toInt(&valid);
+            if (valid && width >= 2 && width <= 8192 && width % 2 == 0)
+                initialExportWidth = width;
+        }
+        else if (args[i] == QLatin1String("--export-height")) {
+            bool valid = false;
+            const int height = args[i + 1].toInt(&valid);
+            if (valid && height >= 2 && height <= 8192 && height % 2 == 0)
+                initialExportHeight = height;
+        }
         else if (args[i] == QLatin1String("--chain"))  initialChain  = args[i + 1];
         else if (args[i] == QLatin1String("--param")) initialParams << args[i + 1];
         else if (args[i] == QLatin1String("--clip"))  initialClips  << args[i + 1];
@@ -136,6 +149,8 @@ int main(int argc, char** argv) {
         { QStringLiteral("initialKeys"),   initialKeys },
         { QStringLiteral("initialGrade"),  initialGrade },
         { QStringLiteral("initialExport"), initialExport },
+        { QStringLiteral("initialExportWidth"), initialExportWidth },
+        { QStringLiteral("initialExportHeight"), initialExportHeight },
         { QStringLiteral("initialChain"),  initialChain },
         { QStringLiteral("initialSave"),   initialSave },
         { QStringLiteral("initialSavePreset"), initialSavePreset },

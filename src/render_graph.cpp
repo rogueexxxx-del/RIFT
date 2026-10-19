@@ -69,6 +69,14 @@ void RenderGraph::reorder(uint32_t id, int index) {
 
 void RenderGraph::clear() { nodes_.clear(); topo_.clear(); }
 
+std::pair<float, float> RenderGraph::scopeTriggerSettings() const {
+    for (const auto& n : nodes_) {
+        if (n.shader_id == "oscilloscope" && n.params.size() > 8)
+            return { n.params[7].value, n.params[8].value };
+    }
+    return { 0.02f, 0.05f };
+}
+
 // Kahn topological sort over the DAG (inputs = dependencies).
 void RenderGraph::retopo_() {
     std::unordered_map<uint32_t, int> indeg;

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // Settings for the clip whose stack is being edited: how it lays over the
 // layers beneath (blend + opacity) and where it sits in the frame (position +
@@ -19,9 +20,10 @@ Rectangle {
 
     property bool expanded: true
     visible: clip !== null
-    color: "#000000"
+    color: Theme.panel
+    radius: Theme.panelRadius
     implicitHeight: visible
-        ? hdr.height + (expanded ? col.implicitHeight + Theme.padding * 2 : 0)
+        ? hdr.height + (expanded ? col.implicitHeight + 16 : 0)
         : 0
 
     SectionHeader {
@@ -51,8 +53,8 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: hdr.bottom
-        anchors.margins: Theme.padding
-        spacing: Theme.gap
+        anchors.margins: 8
+        spacing: Theme.gapTight
 
         // ── text source ──
         // Only for text clips. Everything else about a text clip (blend,
@@ -84,11 +86,14 @@ Rectangle {
             }
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: 24
+                implicitHeight: Theme.control
+                radius: Theme.radius
                 color: Theme.bg
                 border.color: field.activeFocus ? Theme.accent : Theme.hairline
                 TextInput {
                     id: field
+                    activeFocusOnTab: true
+                    Accessible.name: "Clip text"
                     anchors.fill: parent
                     anchors.margins: 4
                     color: Theme.text
@@ -165,7 +170,7 @@ Rectangle {
                     parent.st.r, parent.st.g, parent.st.b, parent.st.bold,
                     v, parent.st.wrapWidth)
             }
-            RowLayout {
+            Flow {
                 Layout.fillWidth: true
                 spacing: Theme.gapTight
                 FlatButton {
@@ -182,13 +187,12 @@ Rectangle {
                 // Presets rather than a colour picker: this is a mono terminal
                 // UI, and text over footage is nearly always one of these.
                 Repeater {
-                    model: [[1,1,1,"WHT"], [1,0.27,0.2,"RED"],
-                            [0.2,1,0.6,"GRN"], [0.3,0.6,1,"BLU"],
-                            [0,0,0,"BLK"]]
+                    model: [[1,1,1,"White"], [1,0.27,0.2,"Red"],
+                            [0.2,1,0.6,"Green"], [0.3,0.6,1,"Blue"],
+                            [0,0,0,"Black"]]
                     delegate: FlatButton {
                         required property var modelData
                         label: modelData[3]
-                        implicitWidth: 36
                         onClicked: insp.viewport.setClipTextStyle(
                             insp.idx, textBox.st.size,
                             textBox.st.x, textBox.st.y,
@@ -211,20 +215,32 @@ Rectangle {
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeSmall
         }
-        Flow {
+        ComboBox {
+            id: clipBlend
+            objectName: "clipBlendSelector"
             Layout.fillWidth: true
-            spacing: Theme.gapTight
-            Repeater {
-                model: insp.viewport.blendNames()
-                delegate: FlatButton {
-                    required property int index
-                    required property string modelData
-                    label: modelData
-                    active: insp.clip && insp.clip.blend === index
-                    onClicked: insp.viewport.setClipBlend(
-                        insp.idx, index, insp.clip ? insp.clip.opacity : 1.0)
-                }
+            implicitHeight: Theme.control
+            font.family: Theme.fontUI
+            font.pixelSize: Theme.sizeSmall
+            palette.text: Theme.text
+            palette.buttonText: Theme.text
+            palette.base: Theme.raised
+            palette.window: Theme.flyout
+            palette.highlight: Theme.accent
+            palette.highlightedText: Theme.foregroundFor(Theme.accent)
+            background: Rectangle {
+                color: Theme.raised
+                radius: Theme.radius
+                border.width: clipBlend.activeFocus ? Theme.focusWidth : 1
+                border.color: clipBlend.activeFocus ? Theme.focusRing : Theme.border
             }
+            Accessible.name: "Clip blend mode"
+            model: insp.viewport.blendNames().map(function(name) {
+                const labels = { "NRM": "Normal", "NORM": "Normal", "ADD": "Add", "SCR": "Screen", "MUL": "Multiply", "OVR": "Overlay", "DIFF": "Difference", "SUB": "Subtract", "LGT": "Lighten", "DRK": "Darken" }
+                return labels[String(name).toUpperCase()] || Theme.nice(name)
+            })
+            currentIndex: insp.clip ? insp.clip.blend : 0
+            onActivated: insp.viewport.setClipBlend(insp.idx, currentIndex, insp.clip ? insp.clip.opacity : 1.0)
         }
 
         ParamSlider {

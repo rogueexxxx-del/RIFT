@@ -36,6 +36,12 @@ Item {
     property string glowColor: "match"
     property int selectedStop: 0
 
+    function chooseColor(target, value) {
+        colorPicker.target = target
+        colorPicker.selectedColor = value
+        colorPicker.open()
+    }
+
     implicitWidth: 320
     implicitHeight: mainCol.implicitHeight + Theme.padding * 2
 
@@ -88,7 +94,7 @@ Item {
     // Native Color Dialog for pickers
     ColorDialog {
         id: colorPicker
-        title: "Select Color"
+        title: "Select color"
         property string target: "solid" // "solid", "stop", "glow"
         onAccepted: {
             const hex = selectedColor.toString()
@@ -109,7 +115,7 @@ Item {
 
     FileDialog {
         id: savePresetDialog
-        title: "Save Color Preset"
+        title: "Save color preset"
         fileMode: FileDialog.SaveFile
         defaultSuffix: "json"
         nameFilters: ["JSON Files (*.json)"]
@@ -118,7 +124,7 @@ Item {
 
     FileDialog {
         id: loadPresetDialog
-        title: "Load Color Preset"
+        title: "Load color preset"
         fileMode: FileDialog.OpenFile
         defaultSuffix: "json"
         nameFilters: ["JSON Files (*.json)"]
@@ -142,11 +148,11 @@ Item {
             spacing: Theme.gap
 
             Text {
-                text: "COLOR STYLE"
+                text: "Color style"
                 color: Theme.textDim
                 font.family: Theme.fontUI
-                font.pixelSize: Theme.sizeSmall
-                font.bold: true
+                font.pixelSize: Theme.size
+                font.weight: Font.DemiBold
                 Layout.fillWidth: true
             }
 
@@ -221,16 +227,20 @@ Item {
 
                 Rectangle {
                     width: 36
-                    height: 22
+                    height: Theme.control
+                    radius: Theme.radius
                     color: editor.solidColor
-                    border.width: 1
-                    border.color: Theme.border
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Choose solid color"
+                    border.width: activeFocus ? Theme.focusWidth : 1
+                    border.color: activeFocus ? Theme.focusRing : Theme.border
+                    Keys.onSpacePressed: editor.chooseColor("solid", editor.solidColor)
+                    Keys.onReturnPressed: editor.chooseColor("solid", editor.solidColor)
 
                     TapHandler {
                         onTapped: {
-                            colorPicker.target = "solid"
-                            colorPicker.selectedColor = editor.solidColor
-                            colorPicker.open()
+                            editor.chooseColor("solid", editor.solidColor)
                         }
                     }
                 }
@@ -339,16 +349,6 @@ Item {
                             onPressed: {
                                 editor.selectedStop = handleItem.index
                             }
-                            onPositionChanged: {
-                                if (drag.active) {
-                                    let newPos = handleItem.x / (handleTrack.width - handleItem.width)
-                                    newPos = Math.round(newPos * 1000) / 1000
-                                    let st = editor.stops.slice()
-                                    st[handleItem.index].position = Math.min(Math.max(newPos, 0.0), 1.0)
-                                    editor.stops = st
-                                    editor.pushToViewport()
-                                }
-                            }
                             onReleased: {
                                 // If dragged off the bar vertically (outside [-20, 45]), delete stop if > 2
                                 if ((handleItem.y > 35 || handleItem.y < -20) && editor.stops.length > 2) {
@@ -361,8 +361,13 @@ Item {
                                 } else {
                                     handleItem.y = 0
                                     let st = editor.stops.slice()
+                                    const pos = Math.min(1, Math.max(0,
+                                        Math.round(handleItem.x / Math.max(1, handleTrack.width - handleItem.width) * 1000) / 1000))
+                                    const moved = { position: pos, color: st[handleItem.index].color }
+                                    st[handleItem.index] = moved
                                     st.sort((a, b) => a.position - b.position)
                                     editor.stops = st
+                                    editor.selectedStop = st.indexOf(moved)
                                     editor.pushToViewport()
                                 }
                             }
@@ -385,16 +390,20 @@ Item {
 
                 Rectangle {
                     width: 28
-                    height: 20
+                    height: Theme.control
+                    radius: Theme.radius
                     color: (editor.stops[editor.selectedStop] ? editor.stops[editor.selectedStop].color : "#fff")
-                    border.width: 1
-                    border.color: Theme.border
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Choose gradient stop color"
+                    border.width: activeFocus ? Theme.focusWidth : 1
+                    border.color: activeFocus ? Theme.focusRing : Theme.border
+                    Keys.onSpacePressed: editor.chooseColor("stop", color)
+                    Keys.onReturnPressed: editor.chooseColor("stop", color)
 
                     TapHandler {
                         onTapped: {
-                            colorPicker.target = "stop"
-                            colorPicker.selectedColor = (editor.stops[editor.selectedStop] ? editor.stops[editor.selectedStop].color : "#ffffff")
-                            colorPicker.open()
+                            editor.chooseColor("stop", parent.color)
                         }
                     }
                 }
@@ -480,16 +489,20 @@ Item {
 
             Rectangle {
                 width: 24
-                height: 20
+                height: Theme.control
+                radius: Theme.radius
                 color: editor.glowColor === "match" ? (editor.styleMode === "solid" ? editor.solidColor : (editor.stops[0] ? editor.stops[0].color : "#fff")) : editor.glowColor
-                border.width: editor.glowColor !== "match" ? 2 : 1
-                border.color: editor.glowColor !== "match" ? Theme.accent : Theme.border
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: "Choose glow color"
+                border.width: activeFocus ? Theme.focusWidth : (editor.glowColor !== "match" ? 2 : 1)
+                border.color: activeFocus ? Theme.focusRing : (editor.glowColor !== "match" ? Theme.accent : Theme.border)
+                Keys.onSpacePressed: editor.chooseColor("glow", color)
+                Keys.onReturnPressed: editor.chooseColor("glow", color)
 
                 TapHandler {
                     onTapped: {
-                        colorPicker.target = "glow"
-                        colorPicker.selectedColor = editor.glowColor === "match" ? "#ff00ffff" : editor.glowColor
-                        colorPicker.open()
+                        editor.chooseColor("glow", parent.color)
                     }
                 }
             }

@@ -3,7 +3,7 @@
   "name": "SLITSCAN",
   "version": 1,
   "frag": "slit_scan.frag",
-  "category": "generator",
+  "category": "glitch",
   "uniforms": [
     {
       "name": "axis",
@@ -28,8 +28,8 @@
         "channel": "melody",
         "depth": 0.5,
         "curve": "lin",
-        "attack": 0,
-        "release": 0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0,
         "in_hi": 1,
         "invert": false

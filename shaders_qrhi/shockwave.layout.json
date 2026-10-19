@@ -1,0 +1,5 @@
+{
+  "id": "shockwave",
+  "params": ["centerX", "centerY", "strength", "frequency", "width", "mixAmount"],
+  "samplers": [["u_tex", 2]]
+}

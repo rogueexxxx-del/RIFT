@@ -38,6 +38,7 @@ layout(std140, binding = 1) uniform Params { vec4 _p[2]; };
 #define speed _p[0].z
 #define color_bleed _p[0].w
 #define sort_dir _p[1].x
+#define quality _p[1].y
 
 
 
@@ -97,8 +98,10 @@ void main() {
     // Coarse-to-fine search: coarse pass finds the bright interval,
     // fine pass refines the boundary so streak edges are not quantized
     // into visible bands.
-    float coarse_step = search_limit / 40.0;
+    int steps = quality >= 0.5 ? 40 : 20;
+    float coarse_step = search_limit / float(steps);
     for (float i = 0.0; i < 40.0; i += 1.0) {
+        if (i >= float(steps)) break;
         float step_size = i * coarse_step;
         vec2 sample_uv = clamp(uv + axis * step_size, 0.0, 1.0);
 

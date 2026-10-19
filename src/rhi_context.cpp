@@ -6,6 +6,9 @@
 #include <QFile>
 #include <QByteArray>
 #include <QColor>
+#include <QFont>
+#include <QImage>
+#include <QPainter>
 #include <QSize>
 #include <QPoint>
 #include <QWindow>
@@ -80,6 +83,7 @@ struct RhiContext::Impl {
     bool  owns_rhi = true;      // false when adopted from Qt Quick
     QRhiSampler* sampler = nullptr;
     QRhiTexture* dummy = nullptr;
+    QRhiTexture* asciiAtlas = nullptr;
     // Audio made visible to shaders. audioTex is 512x2: row 0 spectrum, row 1
     // waveform, both stored 0..1. spectroTex is that spectrum stacked over
     // time, newest row first, which is what a waterfall draws.
@@ -91,6 +95,9 @@ struct RhiContext::Impl {
     // frame and rebuilt when that changes.
     QRhiTexture* prevTex = nullptr;
     int          prevW = 0, prevH = 0;
+    TexId        scopeTargets[3] = {};
+    int          scopeW = 0, scopeH = 0;
+    bool         renderingScope = false;
     float        scopeTrigger = 0.f;   // published to shaders via EngineUBO.C[2]
     int          spectroRow = 0;       // ring write position -> EngineUBO.C[3]
     QByteArray   audioRows;     // 1024*2 bytes
@@ -225,6 +232,33 @@ void RhiContext::initResources_() {
     d_->sampler->create();
     d_->dummy = d_->rhi->newTexture(QRhiTexture::RGBA8, QSize(1, 1));
     d_->dummy->create();
+    const QString glyphRamp = QStringLiteral(" .,:;!iItfXKMW@");
+    QImage atlas(glyphRamp.size() * 32, 32, QImage::Format_RGBA8888);
+    atlas.fill(Qt::transparent);
+    {
+        QPainter painter(&atlas);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+        QFont font(QStringLiteral("UnifrakturCook"));
+        font.setPixelSize(27);
+        painter.setFont(font);
+        painter.setPen(Qt::white);
+        for (int i = 0; i < glyphRamp.size(); ++i)
+            painter.drawText(QRect(i * 32, 0, 32, 32), Qt::AlignCenter,
+                             glyphRamp.mid(i, 1));
+    }
+    d_->asciiAtlas = d_->rhi->newTexture(QRhiTexture::RGBA8, atlas.size());
+    if (d_->asciiAtlas->create()) {
+        const QByteArray pixels(reinterpret_cast<const char*>(atlas.constBits()),
+                                int(atlas.sizeInBytes()));
+        d_->withUpdates([&](QRhiResourceUpdateBatch* u) {
+            QRhiTextureSubresourceUploadDescription sub(pixels);
+            u->uploadTexture(d_->asciiAtlas,
+                             QRhiTextureUploadDescription({ { 0, 0, sub } }));
+        });
+    } else {
+        delete d_->asciiAtlas;
+        d_->asciiAtlas = nullptr;
+    }
     d_->engUbo = d_->rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(EngineUBO));
     d_->engUbo->create();
     for (int i = 0; i < Impl::kMaxPasses; ++i) {
@@ -266,7 +300,7 @@ RhiContext::~RhiContext() {
     delete d_->audioTex; delete d_->spectroTex; delete d_->prevTex; delete d_->lutTex;
     delete d_->engUbo;
     for (int i = 0; i < Impl::kMaxPasses; ++i) delete d_->parUbos[i];
-    delete d_->dummy; delete d_->sampler;
+    delete d_->asciiAtlas; delete d_->dummy; delete d_->sampler;
     if (d_->owns_rhi) delete d_->rhi;   // borrowed from Qt Quick: not ours
 }
 
@@ -299,7 +333,8 @@ static QRhiShaderResourceBindings* buildSrb(QRhi* rhi, QRhiBuffer* eng,
         QRhiBuffer* par, const ShaderLayout& L, QRhiTexture* input,
         QRhiTexture* dummy, QRhiSampler* samp, QRhiTexture* second = nullptr,
         QRhiTexture* audio = nullptr, QRhiTexture* spectro = nullptr,
-        QRhiTexture* prev = nullptr, QRhiTexture* lut = nullptr) {
+        QRhiTexture* prev = nullptr, QRhiTexture* lut = nullptr,
+        QRhiTexture* asciiAtlas = nullptr) {
     const auto FS = QRhiShaderResourceBinding::FragmentStage;
     QVarLengthArray<QRhiShaderResourceBinding, 8> b;
     b.append(QRhiShaderResourceBinding::uniformBuffer(0, FS, eng));
@@ -311,6 +346,7 @@ static QRhiShaderResourceBindings* buildSrb(QRhi* rhi, QRhiBuffer* eng,
         QRhiTexture* t = dummy;
         if      (name == "u_audio_texture") t = audio   ? audio   : dummy;
         else if (name == "u_spectro_tex")   t = spectro ? spectro : dummy;
+        else if (name == "u_ascii_atlas")   t = asciiAtlas ? asciiAtlas : dummy;
         // Previous finished frame. Falls back to the dummy on frame 0 and any
         // time the size just changed, so a feedback shader starts from black
         // rather than from a stale differently-sized texture.
@@ -468,7 +504,8 @@ PipeId RhiContext::pipeline(const std::string& id) {
         p.layout.samplers.emplace_back("u_tex", 2);
 
     p.srb = buildSrb(d_->rhi, d_->engUbo, d_->parUbos[0], p.layout,
-                     d_->dummy, d_->dummy, d_->sampler);
+                     d_->dummy, d_->dummy, d_->sampler, nullptr, nullptr,
+                     nullptr, nullptr, nullptr, d_->asciiAtlas);
     p.ps = d_->rhi->newGraphicsPipeline();
     p.ps->setShaderStages({ { QRhiShaderStage::Vertex, vs },
                             { QRhiShaderStage::Fragment, fs } });
@@ -487,11 +524,13 @@ void RhiContext::warmPipelines(const std::vector<std::string>& shaderIds) {
     if (!d_->rhi) return;
     if (shaderIds.empty()) {
         static const std::vector<std::string> kKnownShaders = {
-            "ascii", "bloom", "blur", "color_grade", "composite", "cyanotype",
+            "ascii", "bloom", "color_grade", "composite", "contour",
             "datamosh", "dither", "dot_field", "electron_scan", "feedback",
             "flow_warp", "fracture", "glitch", "halftone", "kaleido", "lens",
-            "mirror_tile", "noise_field", "oscilloscope", "pixel_sort", "post_fx",
-            "risograph", "slit_scan", "terminal", "thermal", "tunnel", "voronoi_shatter", "blit"
+            "noise_field", "oscilloscope", "pixel_sort", "post_fx",
+            "risograph", "slit_scan", "tunnel", "voronoi_shatter",
+            "halation_grain", "prism_split", "shockwave", "blit"
+            , "scope_bloom_extract", "scope_bloom_blur", "scope_bloom_composite"
         };
         for (const auto& sid : kKnownShaders) {
             pipeline(sid);
@@ -514,6 +553,17 @@ TexId RhiContext::createTarget(int w, int h) {
     TexId id = d_->nextTex++;
     d_->textures[id] = e;
     return id;
+}
+
+void RhiContext::prepareScopeTargets(int w, int h) {
+    if (!d_->rhi || w <= 0 || h <= 0) return;
+    if (d_->scopeW == w && d_->scopeH == h && d_->scopeTargets[0]) return;
+    for (auto& target : d_->scopeTargets) {
+        if (target) releaseTexture(target);
+        target = createTarget(w, h);
+    }
+    d_->scopeW = w;
+    d_->scopeH = h;
 }
 
 TexId RhiContext::uploadImage(const uint8_t* rgba, int w, int h) {
@@ -632,6 +682,29 @@ void RhiContext::drawPass(PipeId pipe, TexId outTex, int w, int h,
                           TexId inputTex, TexId secondTex) {
     auto sit = d_->pipeIdToShader.find(pipe);
     if (sit == d_->pipeIdToShader.end()) return;
+    if (sit->second == "oscilloscope" && !d_->renderingScope &&
+        d_->scopeW == w && d_->scopeH == h && d_->scopeTargets[0] &&
+        d_->scopeTargets[1] && d_->scopeTargets[2]) {
+        const float radius = params && nparams > 12 ? params[12] : 1.5f;
+        const float intensity = params && nparams > 3 ? params[3] : 1.0f;
+        const float blurX[2] = { radius, 0.0f }, blurY[2] = { radius, 1.0f };
+        const float bloomStrength[1] = { intensity * 0.25f };
+        const PipeId extract = pipeline("scope_bloom_extract");
+        const PipeId blur = pipeline("scope_bloom_blur");
+        const PipeId composite = pipeline("scope_bloom_composite");
+        auto pass = [&](PipeId id, TexId dst, TexId src, TexId second = 0,
+                        const float* pv = nullptr, int count = 0) {
+            drawPass(id, dst, w, h, eng, pv, count, src, second);
+        };
+        d_->renderingScope = true;
+        pass(pipe, d_->scopeTargets[0], inputTex, 0, params, nparams);
+        d_->renderingScope = false;
+        pass(extract, d_->scopeTargets[1], d_->scopeTargets[0]);
+        pass(blur, d_->scopeTargets[2], d_->scopeTargets[1], 0, blurX, 2);
+        pass(blur, d_->scopeTargets[1], d_->scopeTargets[2], 0, blurY, 2);
+        pass(composite, outTex, d_->scopeTargets[0], d_->scopeTargets[1], bloomStrength, 1);
+        return;
+    }
     Pipe& P = d_->pipes[sit->second];
     auto oit = d_->textures.find(outTex);
     if (oit == d_->textures.end()) return;
@@ -661,7 +734,8 @@ void RhiContext::drawPass(PipeId pipe, TexId outTex, int w, int h,
     // per-draw SRB with the real input at binding 2 (layout-compatible)
     QRhiShaderResourceBindings* srb = buildSrb(d_->rhi, d_->engUbo, curPar,
         P.layout, input, d_->dummy, d_->sampler, second,
-        d_->audioTex, d_->spectroTex, d_->prevTex, d_->lutTex);
+        d_->audioTex, d_->spectroTex, d_->prevTex, d_->lutTex,
+        d_->asciiAtlas);
 
     d_->cb->beginPass(oit->second.rt, QColor(0,0,0,255), { 1.0f, 0 }, u);
     d_->cb->setGraphicsPipeline(P.ps);

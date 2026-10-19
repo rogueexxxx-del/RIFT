@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <deque>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace rift {
@@ -20,7 +21,7 @@ struct DecodedFrame {
     int       w = 0, h = 0;
     bool      is_gpu = false;   // true: gpu_tex valid; false: rgba valid
     uint32_t  gpu_tex = 0;      // HW path (D3D11 shared texture id)
-    std::vector<uint8_t> rgba;  // SW path
+    std::shared_ptr<std::vector<uint8_t>> rgba;  // SW path, shared across queue reads
 };
 
 class FrameQueue {

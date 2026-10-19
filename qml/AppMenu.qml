@@ -8,16 +8,20 @@ import QtQuick.Dialogs
 MenuBar {
     id: bar
     required property var viewport
+    property var effectIds: []
+    property var panelManager: null
     // Panels the shell can show/hide, owned by Main so the layout can react.
     property bool showColor: false
     property bool showQueue: false
 
     signal requestExit()
+    signal requestPanel(string panelId)
+    signal resetWorkspaceRequested()
 
     // The Basic style ships light grey; restate it in the app's own palette so
     // the menu does not look bolted on. The bar sits on the page colour rather
     // than the panel colour so it reads as chrome, not as another region.
-    spacing: 6
+    spacing: Theme.gapTight
     background: Rectangle {
         color: "transparent"
     }
@@ -27,20 +31,20 @@ MenuBar {
         padding: 0
         contentItem: Text {
             text: mbi.text
-            color: mbi.highlighted ? "#FFFFFF" : "#D4D4D4"
+            color: Theme.text
             font.family: Theme.fontUI
-            font.pixelSize: 12
+            font.pixelSize: Theme.size
             font.weight: Font.Medium
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            implicitWidth: mbi.contentItem.implicitWidth + 18
-            implicitHeight: 28
+            implicitWidth: mbi.contentItem.implicitWidth + Theme.padding * 2
+            implicitHeight: Theme.control
             radius: Theme.radius
-            color: mbi.highlighted ? "#1F1F1F" : "transparent"
-            border.width: mbi.highlighted ? 1 : 0
-            border.color: "#333333"
+            color: mbi.highlighted ? Theme.hover : "transparent"
+            border.width: mbi.visualFocus ? Theme.focusWidth : 0
+            border.color: Theme.focusRing
         }
         HoverHandler { cursorShape: Qt.PointingHandCursor }
     }
@@ -104,86 +108,177 @@ MenuBar {
         id: exportProgress
         viewport: bar.viewport
     }
-    PreferencesDialog { id: prefsDialog; viewport: bar.viewport }
+    PreferencesDialog { id: prefsDialog; viewport: bar.viewport; effectIds: bar.effectIds }
 
     StyledMenu {
         title: "File"
-        MenuItem { text: "New project";      onTriggered: bar.viewport.newProject() }
-        MenuItem { text: "Open…";            onTriggered: openDialog.open() }
-        MenuItem { text: "Save";             onTriggered: bar.saveProject() }
-        MenuItem { text: "Save as…";         onTriggered: saveDialog.open() }
-        MenuItem { text: "Save preset…";     onTriggered: presetDialog.open() }
-        MenuItem { text: "Import video or image…"; onTriggered: mediaDialog.open() }
-        MenuItem { text: "Import audio…";    onTriggered: audioDialog.open() }
-        MenuItem { text: "Add text layer";   onTriggered: {
+        StyledMenuItem { text: "New project"; shortcutText: "Ctrl+N"; onTriggered: bar.viewport.newProject() }
+        StyledMenuItem { text: "Open…"; shortcutText: "Ctrl+O"; onTriggered: openDialog.open() }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Save"; shortcutText: "Ctrl+S"; onTriggered: bar.saveProject() }
+        StyledMenuItem { text: "Save as…";         onTriggered: saveDialog.open() }
+        StyledMenuItem { text: "Save preset…";     onTriggered: presetDialog.open() }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Import video or image…"; onTriggered: mediaDialog.open() }
+        StyledMenuItem { text: "Import audio…";    onTriggered: audioDialog.open() }
+        StyledMenuItem { text: "Add text layer";   onTriggered: {
             bar.viewport.addTextClip("Text", 1, 5.0)
             bar.viewport.selectClip(bar.viewport.clips.length - 1)
         } }
-        MenuItem { text: "Export video…";    onTriggered: exportDialog.open() }
-        MenuItem { text: "Render queue";     onTriggered: bar.showQueue = !bar.showQueue }
-        MenuItem { text: "Exit";             onTriggered: bar.requestExit() }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Export video…"; shortcutText: "Ctrl+E"; onTriggered: exportDialog.open() }
+        StyledMenuItem { text: "Render queue";     onTriggered: bar.requestPanel("queue") }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Exit";             onTriggered: bar.requestExit() }
     }
 
     StyledMenu {
         title: "Edit"
-        MenuItem {
+        StyledMenuItem {
             text: bar.viewport.canUndo ? "Undo " + bar.viewport.undoLabel : "Undo"
+            shortcutText: "Ctrl+Z"
             enabled: bar.viewport.canUndo
             onTriggered: bar.viewport.undo()
         }
-        MenuItem {
+        StyledMenuItem {
             text: bar.viewport.canRedo ? "Redo " + bar.viewport.redoLabel : "Redo"
+            shortcutText: "Ctrl+Y"
             enabled: bar.viewport.canRedo
             onTriggered: bar.viewport.redo()
         }
-        MenuItem { text: "Reset effect settings"; onTriggered: bar.viewport.resetParams() }
-        MenuItem { text: "Reset colour";          onTriggered: bar.viewport.resetGrade() }
-        MenuItem { text: "Preferences…";          onTriggered: prefsDialog.open() }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Detect beats"; onTriggered: bar.viewport.detectMarkers() }
+        StyledMenuItem {
+            text: "Snap to beats"
+            checkable: true
+            checked: bar.viewport.snapToMarkers
+            onTriggered: bar.viewport.snapToMarkers = !bar.viewport.snapToMarkers
+        }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Reset effect settings"; onTriggered: bar.viewport.resetParams() }
+        StyledMenuItem { text: "Reset colour";          onTriggered: bar.viewport.resetGrade() }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Preferences…";          onTriggered: prefsDialog.open() }
     }
 
     StyledMenu {
         title: "View"
-        MenuItem {
-            text: (bar.viewport.mode === 0 ? "• " : "   ") + "React mode"
+        StyledMenuItem {
+            text: "React mode"
+            shortcutText: "1"
+            checkable: true
+            checked: bar.viewport.mode === 0
             onTriggered: bar.viewport.mode = 0
         }
-        MenuItem {
-            text: (bar.viewport.mode === 1 ? "• " : "   ") + "Live mode"
+        StyledMenuItem {
+            text: "Live mode"
+            shortcutText: "2"
+            checkable: true
+            checked: bar.viewport.mode === 1
             onTriggered: bar.viewport.mode = 1
         }
-        MenuItem {
-            text: (bar.showColor ? "• " : "   ") + "Colour grade"
-            onTriggered: bar.showColor = !bar.showColor
+        StyledMenuSeparator {}
+        StyledMenuItem {
+            text: "Colour grade"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("color") : bar.showColor
+            onTriggered: bar.requestPanel("color")
         }
-        MenuItem {
-            text: (bar.showQueue ? "• " : "   ") + "Render queue"
-            onTriggered: bar.showQueue = !bar.showQueue
+        StyledMenuItem {
+            text: "Render queue"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("queue") : bar.showQueue
+            onTriggered: bar.requestPanel("queue")
         }
-        MenuItem { text: "Detect beats";  onTriggered: bar.viewport.detectMarkers() }
-        MenuItem {
-            text: (bar.viewport.snapToMarkers ? "• " : "   ") + "Snap to beats"
-            onTriggered: bar.viewport.snapToMarkers = !bar.viewport.snapToMarkers
+        StyledMenuItem {
+            text: "Effect chain"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("effects") : false
+            onTriggered: bar.requestPanel("effects")
         }
+        StyledMenuItem {
+            text: "Presets"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("presets") : false
+            onTriggered: bar.requestPanel("presets")
+        }
+        StyledMenuItem {
+            text: "Parameters"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("params") : false
+            onTriggered: bar.requestPanel("params")
+        }
+        StyledMenuItem {
+            text: "Clip inspector"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("clip") : false
+            onTriggered: bar.requestPanel("clip")
+        }
+        StyledMenuItem {
+            text: "Audio input"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("audio") : false
+            onTriggered: bar.requestPanel("audio")
+        }
+        StyledMenuItem {
+            text: "Preview"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("preview") : false
+            onTriggered: bar.requestPanel("preview")
+        }
+        StyledMenuItem {
+            text: "Timeline"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("timeline") : false
+            enabled: !bar.panelManager || !bar.panelManager.live
+            onTriggered: bar.requestPanel("timeline")
+        }
+        StyledMenuItem {
+            text: "Levels"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("levels") : false
+            enabled: !bar.panelManager || !bar.panelManager.live
+            onTriggered: bar.requestPanel("levels")
+        }
+        StyledMenuItem {
+            text: "Controller settings"
+            checkable: true
+            checked: bar.panelManager ? bar.panelManager.isPanelVisible("controls") : false
+            onTriggered: bar.requestPanel("controls")
+        }
+        StyledMenuSeparator {}
+        StyledMenuItem { text: "Reset workspace"; onTriggered: bar.resetWorkspaceRequested() }
+        StyledMenuSeparator {}
         StyledMenu {
             title: "Aspect ratio"
-            MenuItem {
-                text: (bar.viewport.projectAspect === 0 ? "• " : "   ") + "16:9 (Widescreen)"
+            StyledMenuItem {
+                text: "16:9 (Widescreen)"
+            checkable: true
+            checked: bar.viewport.projectAspect === 0
                 onTriggered: bar.viewport.projectAspect = 0
             }
-            MenuItem {
-                text: (bar.viewport.projectAspect === 1 ? "• " : "   ") + "1:1 (Square)"
+            StyledMenuItem {
+                text: "1:1 (Square)"
+            checkable: true
+            checked: bar.viewport.projectAspect === 1
                 onTriggered: bar.viewport.projectAspect = 1
             }
-            MenuItem {
-                text: (bar.viewport.projectAspect === 2 ? "• " : "   ") + "4:3 (Classic)"
+            StyledMenuItem {
+                text: "4:3 (Classic)"
+            checkable: true
+            checked: bar.viewport.projectAspect === 2
                 onTriggered: bar.viewport.projectAspect = 2
             }
-            MenuItem {
-                text: (bar.viewport.projectAspect === 3 ? "• " : "   ") + "9:16 (Vertical)"
+            StyledMenuItem {
+                text: "9:16 (Vertical)"
+            checkable: true
+            checked: bar.viewport.projectAspect === 3
                 onTriggered: bar.viewport.projectAspect = 3
             }
-            MenuItem {
-                text: (bar.viewport.projectAspect === 4 ? "• " : "   ") + "21:9 (Ultrawide)"
+            StyledMenuItem {
+                text: "21:9 (Ultrawide)"
+            checkable: true
+            checked: bar.viewport.projectAspect === 4
                 onTriggered: bar.viewport.projectAspect = 4
             }
         }
@@ -191,8 +286,8 @@ MenuBar {
 
     StyledMenu {
         title: "Help"
-        MenuItem { text: "Keyboard shortcuts"; onTriggered: helpDialog.open() }
-        MenuItem { text: "About RIFT";         onTriggered: aboutDialog.open() }
+        StyledMenuItem { text: "Keyboard shortcuts"; onTriggered: helpDialog.open() }
+        StyledMenuItem { text: "About RIFT";         onTriggered: aboutDialog.open() }
     }
 
     ShortcutSheet { id: helpDialog }

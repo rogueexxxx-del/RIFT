@@ -39,8 +39,9 @@ public:
     // mixes clips live during playback, and rebuilds the channel/waveform/beat
     // data from the mix. `analysis_path` is kept only for the single-clip
     // optimization below - a multi-clip mix cannot use a per-file blob.
+    // Offline export passes monitor=false because it renders the mix without playback.
     bool setAudioClips(const std::vector<AudioClipSpec>& clips,
-                       const std::string& analysis_path = {});
+                       const std::string& analysis_path = {}, bool monitor = true);
 
     // Single-clip projects that carry a precomputed .analysis blob keep the
     // numerically validated offline channel path, so an existing project reacts
@@ -49,6 +50,9 @@ public:
     int    audioLaneCount() const { return mixer_ ? mixer_->laneCount() : 1; }
     double audioClipStart(int i) const { return mixer_ ? mixer_->clipStart(i) : 0.0; }
     double audioClipSpan(int i) const { return mixer_ ? mixer_->clipSpan(i) : 0.0; }
+    std::shared_ptr<const AudioMixer::SourceWaveform> audioClipWaveform(int i) const {
+        return mixer_ ? mixer_->clipWaveform(i) : nullptr;
+    }
     bool   empty() const { return !mixer_ || mixer_->empty(); }
 
     // Offline bounce of the mix over [start, start+dur) to a stereo f32 WAV,
@@ -103,7 +107,8 @@ public:
     const VisualizerTap& visualizerTap() const { return tap_; }
 
     // 1. Oscilloscope: locked, sharp, zero-crossing hysteresis + sub-sample offset
-    void getOscilloscope(double playhead, float* outW, int nW, float windowMs = 0.0f);
+    void getOscilloscope(double playhead, float* outW, int nW, float windowMs = 0.0f,
+                        float triggerLevel = 0.02f, float holdoff = 0.05f);
 
     // 2. Spectrum Analyzer: 4096-sample Hann FFT, log bins 20Hz-20kHz, dB domain visual fall smoothing, slope compensation.
     // Also caches raw dB array for Spectrogram so FFT is computed once.

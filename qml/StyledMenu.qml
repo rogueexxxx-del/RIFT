@@ -13,37 +13,27 @@ Menu {
     // Popup.Item keeps the menu inside the scene graph instead of spawning a
     // native window, so it inherits the window's theme and cannot be clipped.
     popupType: Popup.Item
-    padding: 6
-    implicitWidth: 260
+    padding: Theme.gapTight
+    spacing: 0
+    font.family: Theme.fontUI
+    font.pixelSize: Math.max(12, Theme.size)
+    implicitWidth: {
+        let widest = 136
+        for (let i = 0; i < count; ++i) {
+            const row = itemAt(i)
+            if (row && typeof row.text === "string") widest = Math.max(widest, row.implicitWidth)
+        }
+        return widest + leftPadding + rightPadding
+    }
+    margins: Theme.gap
+    height: Math.min(implicitHeight, Overlay.overlay ? Overlay.overlay.height - Theme.groupGap : implicitHeight)
 
     background: Rectangle {
-        color: "#141414"
-        radius: 4
+        color: Theme.flyout
+        radius: Theme.panelRadius
         border.width: 1
-        border.color: "#2A2A2A"
+        border.color: Theme.popupBorder
     }
 
-    delegate: MenuItem {
-        id: mi
-        implicitHeight: 28
-        leftPadding: 14
-        rightPadding: 14
-
-        contentItem: Text {
-            text: mi.text
-            color: !mi.enabled ? "#555555"
-                 : mi.highlighted ? "#FFFFFF" : "#CCCCCC"
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeSmall
-            font.weight: mi.highlighted ? Font.Medium : Font.Normal
-            verticalAlignment: Text.AlignVCenter
-        }
-        background: Rectangle {
-            color: mi.highlighted ? "#222222" : "transparent"
-            radius: 3
-            border.width: mi.highlighted ? 1 : 0
-            border.color: "#333333"
-        }
-        HoverHandler { cursorShape: Qt.PointingHandCursor }
-    }
+    delegate: StyledMenuItem {}
 }

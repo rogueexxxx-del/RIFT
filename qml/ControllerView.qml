@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // A picture of the controller in front of you, with MAP on top - the Ableton
 // idea: see your hardware, click the knob you mean, then click the setting.
@@ -12,8 +13,18 @@ Rectangle {
     required property var viewport
 
     property bool mapping: false
+    Keys.onEscapePressed: { forceActiveFocus(); mapping = false; viewport.armControl("") }
+
+    function reveal(control) {
+        const flick = controllerScroll.contentItem
+        const top = control.mapToItem(col, 0, 0).y + Theme.padding
+        if (top < flick.contentY) flick.contentY = top
+        else if (top + control.height > flick.contentY + flick.height)
+            flick.contentY = top + control.height - flick.height
+    }
 
     color: Theme.panel
+    radius: Theme.panelRadius
 
     // Default CCs/notes as the units ship. A controller re-programmed in its
     // vendor editor still maps fine - MAP learns whatever actually arrives, the
@@ -64,25 +75,33 @@ Rectangle {
         return m
     }
 
-    implicitHeight: col.implicitHeight + Theme.padding * 2
+    implicitHeight: Math.min(480, col.implicitHeight + Theme.padding * 2)
 
+    ScrollView {
+        id: controllerScroll
+        objectName: "controllerScroll"
+        anchors.fill: parent
+        clip: true
+        contentWidth: availableWidth
+        contentHeight: col.implicitHeight + Theme.padding * 2
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
     ColumnLayout {
         id: col
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: Theme.padding
+        x: Theme.padding
+        y: Theme.padding
+        width: Math.max(0, controllerScroll.availableWidth - Theme.padding * 2)
         spacing: Theme.gap
 
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
             spacing: Theme.gap
 
             FlatButton {
                 label: view.mapping ? "Mapping - click a control" : "Map"
                 active: view.mapping
-                implicitWidth: view.mapping ? 190 : 70
+                implicitWidth: Math.min(parent.width, view.mapping ? 220 : 70)
                 onClicked: {
+                    if (view.mapping) view.forceActiveFocus()
                     view.mapping = !view.mapping
                     if (!view.mapping) view.viewport.armControl("")
                 }
@@ -98,15 +117,17 @@ Rectangle {
                 onClicked: view.viewport.connectController()
             }
             Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
                 text: view.viewport.midiOpen
-                      ? view.profile.name
-                      : "plug in a MIDI controller, then connect"
+                      ? "MIDI connected: " + view.viewport.midiName
+                      : "Connect a MIDI controller, then choose Connect controller. Audio listening is separate."
                 color: view.viewport.midiOpen ? Theme.text : Theme.textMuted
                 font.family: Theme.fontUI
                 font.pixelSize: Theme.size
             }
-            Item { Layout.fillWidth: true }
             Text {
+                width: parent.width
                 text: view.viewport.lastControl
                 color: Theme.accent
                 font.family: Theme.fontUI
@@ -118,14 +139,16 @@ Rectangle {
 
         // ── knobs ──
         Grid {
+            objectName: "controllerKnobs"
             Layout.fillWidth: true
-            columns: 8
+            columns: Math.max(1, Math.min(8, Math.floor(width / 84)))
             spacing: Theme.gapTight
             Repeater {
                 model: view.profile.knobs
                 delegate: Rectangle {
                     required property var modelData
                     readonly property string key: "cc:" + modelData.cc
+                    objectName: "controller-" + key
                     readonly property string boundTo: view.bound[key] || ""
                     readonly property bool armed: view.viewport.armedControl === key
 
@@ -148,11 +171,20 @@ Rectangle {
                     }
                     Timer { id: cool; interval: 350; onTriggered: hot = false }
 
-                    width: 62; height: 44
+                    width: (parent.width - (parent.columns - 1) * parent.spacing) / parent.columns
+                    height: 64
+                    radius: Theme.radius
+                    activeFocusOnTab: view.mapping
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "MIDI CC " + modelData.cc + (boundTo ? ", " + boundTo : ", unassigned")
+                    onActiveFocusChanged: if (activeFocus) view.reveal(this)
+                    Accessible.onPressAction: if (view.mapping) view.viewport.armControl(key)
+                    Keys.onSpacePressed: if (view.mapping) view.viewport.armControl(key)
+                    Keys.onReturnPressed: if (view.mapping) view.viewport.armControl(key)
                     color: armed ? Theme.accent
                          : hot   ? Theme.accentSoft : "transparent"
-                    border.width: hot ? 2 : 1
-                    border.color: armed ? Theme.accent
+                    border.width: activeFocus || hot ? Theme.focusWidth : 1
+                    border.color: activeFocus ? Theme.focusRing : armed ? Theme.accent
                                 : hot   ? Theme.accent
                                 : (boundTo !== "" ? Theme.accent : Theme.hairline)
                     Behavior on border.width { NumberAnimation { duration: 90 } }
@@ -163,7 +195,7 @@ Rectangle {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "cc " + modelData.cc
-                            color: parent.parent.armed ? Theme.bg : Theme.textMuted
+                            color: parent.parent.armed ? Theme.foregroundFor(Theme.accent) : Theme.readableText(Theme.textMuted, parent.parent.hot ? Theme.accentSoft : Theme.panel)
                             font.family: Theme.fontUI
                             font.pixelSize: Theme.sizeTiny
                         }
@@ -171,12 +203,11 @@ Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: parent.parent.boundTo !== "" ? parent.parent.boundTo
                                                                : ("knob " + modelData.label)
-                            color: parent.parent.armed ? Theme.bg
-                                 : (parent.parent.boundTo !== "" ? Theme.accent
-                                                                 : Theme.textMuted)
+                            color: parent.parent.armed ? Theme.foregroundFor(Theme.accent)
+                                 : Theme.readableText(parent.parent.boundTo !== "" ? Theme.accent : Theme.textMuted, parent.parent.hot ? Theme.accentSoft : Theme.panel)
                             font.family: Theme.fontUI
                             font.pixelSize: Theme.sizeSmall
-                            width: 56
+                            width: parent.parent.width - 8
                             elide: Text.ElideRight
                             horizontalAlignment: Text.AlignHCenter
                         }
@@ -191,7 +222,7 @@ Rectangle {
         // ── pads ──
         Grid {
             Layout.fillWidth: true
-            columns: 8
+            columns: Math.max(1, Math.min(8, Math.floor(width / 84)))
             spacing: Theme.gapTight
             Repeater {
                 model: view.profile.pads
@@ -218,20 +249,29 @@ Rectangle {
                     }
                     Timer { id: padCool; interval: 350; onTriggered: hot = false }
 
-                    width: 62; height: 30
+                    width: (parent.width - (parent.columns - 1) * parent.spacing) / parent.columns
+                    height: Theme.rowHeight
+                    radius: Theme.radius
+                    activeFocusOnTab: view.mapping
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "MIDI pad " + (index + 1) + (boundTo ? ", " + boundTo : ", unassigned")
+                    onActiveFocusChanged: if (activeFocus) view.reveal(this)
+                    Accessible.onPressAction: if (view.mapping) view.viewport.armControl(key)
+                    Keys.onSpacePressed: if (view.mapping) view.viewport.armControl(key)
+                    Keys.onReturnPressed: if (view.mapping) view.viewport.armControl(key)
                     color: armed ? Theme.accent
                          : hot   ? Theme.accentSoft : "transparent"
-                    border.width: 1
-                    border.color: armed ? Theme.accent
+                    border.width: activeFocus ? Theme.focusWidth : 1
+                    border.color: activeFocus ? Theme.focusRing : armed ? Theme.accent
                                         : (boundTo !== "" ? Theme.accent : Theme.hairline)
                     Text {
                         anchors.centerIn: parent
                         text: parent.boundTo !== "" ? parent.boundTo : ("pad " + (index + 1))
-                        color: parent.armed ? Theme.bg
-                             : (parent.boundTo !== "" ? Theme.accent : Theme.textMuted)
+                        color: parent.armed ? Theme.foregroundFor(Theme.accent)
+                             : Theme.readableText(parent.boundTo !== "" ? Theme.accent : Theme.textMuted, parent.hot ? Theme.accentSoft : Theme.panel)
                         font.family: Theme.fontUI
                         font.pixelSize: Theme.sizeSmall
-                        width: 56
+                        width: parent.width - 8
                         elide: Text.ElideRight
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -250,7 +290,7 @@ Rectangle {
             visible: view.profile.keys > 0
             implicitHeight: 54
 
-            readonly property int keyW: 24
+            readonly property real keyW: width / Math.max(1, whiteNotes.length)
             readonly property var whiteNotes: {
                 const out = []
                 const pat = [0, 2, 4, 5, 7, 9, 11]
@@ -283,13 +323,20 @@ Rectangle {
                     readonly property string key: "note:" + modelData
                     readonly property bool armed: view.viewport.armedControl === key
                     readonly property bool mapped: view.bound[key] !== undefined
+                    activeFocusOnTab: view.mapping
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "MIDI note " + modelData
+                    Accessible.onPressAction: if (view.mapping) view.viewport.armControl(key)
+                    onActiveFocusChanged: if (activeFocus) view.reveal(this)
+                    Keys.onSpacePressed: if (view.mapping) view.viewport.armControl(key)
+                    Keys.onReturnPressed: if (view.mapping) view.viewport.armControl(key)
 
                     x: index * parent.keyW
                     width: parent.keyW - 2
                     height: 54
                     color: armed ? Theme.accent : (mapped ? "#4A4A4A" : "#E6E6E6")
-                    border.width: 1
-                    border.color: Theme.hairline
+                    border.width: activeFocus ? Theme.focusWidth : 1
+                    border.color: activeFocus ? Theme.focusRing : Theme.hairline
                     TapHandler {
                         onTapped: if (view.mapping) view.viewport.armControl(parent.key)
                     }
@@ -302,14 +349,21 @@ Rectangle {
                     readonly property string key: "note:" + modelData.note
                     readonly property bool armed: view.viewport.armedControl === key
                     readonly property bool mapped: view.bound[key] !== undefined
+                    activeFocusOnTab: view.mapping
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "MIDI note " + modelData.note
+                    Accessible.onPressAction: if (view.mapping) view.viewport.armControl(key)
+                    onActiveFocusChanged: if (activeFocus) view.reveal(this)
+                    Keys.onSpacePressed: if (view.mapping) view.viewport.armControl(key)
+                    Keys.onReturnPressed: if (view.mapping) view.viewport.armControl(key)
 
                     x: modelData.after * parent.keyW - 7
                     z: 1
                     width: 14
                     height: 34
                     color: armed ? Theme.accent : (mapped ? "#8A8A8A" : "#111111")
-                    border.width: 1
-                    border.color: Theme.hairline
+                    border.width: activeFocus ? Theme.focusWidth : 1
+                    border.color: activeFocus ? Theme.focusRing : Theme.hairline
                     TapHandler {
                         onTapped: if (view.mapping) view.viewport.armControl(parent.key)
                     }
@@ -328,5 +382,6 @@ Rectangle {
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeSmall
         }
+    }
     }
 }

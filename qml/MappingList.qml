@@ -46,7 +46,7 @@ Rectangle {
             Text {
                 visible: list.viewport.learning >= 0
                 text: "move a control to bind it"
-                color: Theme.accent
+                color: Theme.accentText
                 font.family: Theme.fontUI
                 font.pixelSize: Theme.sizeSmall
             }
@@ -54,22 +54,33 @@ Rectangle {
 
         // Nothing bound yet: say how to bind something rather than showing an
         // empty box.
-        Text {
+        ScrollView {
+            id: emptyHelp
             visible: list.viewport.allMappings.length === 0
             Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            text: "Nothing mapped yet. Open an effect, press Map beside a "
-                + "setting, then move a knob, pad or fader. Any controller "
-                + "works - RIFT binds whatever message arrives, so it does not "
-                + "need to know your hardware.\n\n"
-                + "Running a DAW at the same time? A controller can usually "
-                + "only talk to one program. Either give RIFT its own "
-                + "controller, or send CCs from the DAW down a virtual MIDI "
-                + "port (loopMIDI on Windows) and pick that port here."
-            color: Theme.textMuted
-            font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeTiny
-            lineHeight: 1.3
+            Layout.fillHeight: true
+            focusPolicy: Qt.StrongFocus
+            Accessible.name: "Controller mapping help"
+            clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            Text {
+                width: Math.max(0, emptyHelp.availableWidth - Theme.gap)
+                wrapMode: Text.WordWrap
+                text: "Nothing mapped yet. Open an effect, press Map beside a "
+                    + "setting, then move a knob, pad or fader. Any controller "
+                    + "works - RIFT binds whatever message arrives, so it does not "
+                    + "need to know your hardware.\n\n"
+                    + "Running a DAW at the same time? A controller can usually "
+                    + "only talk to one program. Either give RIFT its own "
+                    + "controller, or send CCs from the DAW down a virtual MIDI "
+                    + "port (loopMIDI on Windows) and pick that port here."
+                color: Theme.textMuted
+                font.family: Theme.fontUI
+                font.pixelSize: Theme.sizeTiny
+                lineHeight: 1.3
+            }
         }
 
         ListView {
@@ -97,7 +108,7 @@ Rectangle {
 
                     Text {
                         text: list.pretty(modelData.key)
-                        color: Theme.accent
+                        color: Theme.accentText
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.sizeSmall
                         Layout.preferredWidth: 72

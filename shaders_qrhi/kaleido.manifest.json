@@ -3,7 +3,7 @@
   "name": "KALEIDO",
   "version": 1,
   "frag": "kaleido.frag",
-  "category": "generator",
+  "category": "distort",
   "uniforms": [
     {
       "name": "segments",
@@ -18,8 +18,8 @@
         "channel": "snare",
         "depth": 4.0,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false
@@ -38,8 +38,8 @@
         "channel": "melody",
         "depth": 0.6,
         "curve": "lin",
-        "attack": 0.0,
-        "release": 0.0,
+        "attack": 0.08,
+        "release": 0.24,
         "in_lo": 0.0,
         "in_hi": 1.0,
         "invert": false

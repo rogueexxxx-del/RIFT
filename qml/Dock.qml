@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 
 // A named, collapsible, resizable side panel.
 //
@@ -10,21 +11,28 @@ Item {
     id: dock
     property string title: ""
     property bool   collapsed: false
+    property bool   floating: false
     // Which edge the resize handle lives on: "left" for a right-hand dock.
     property string handleEdge: "right"
     property int    expandedWidth: 260
     property int    minWidth: 200
     property int    maxWidth: 520
     default property alias content: body.data
+    property alias bodyItem: body
 
     property string side: handleEdge === "right" ? "left" : "right"
     property string actionText: "+"
     property var tabs: []
+    property bool tabsDetachable: false
     property int currentTab: 0
     signal tabClicked(int index)
     signal actionTriggered()
     signal titleClicked()
     signal moveRequested()
+    signal floatRequested()
+    signal tabFloatRequested(int index)
+    signal dragMoved(real dx, real dy, real screenX, real screenY)
+    signal dragFinished(real dx, real dy, real screenX, real screenY)
 
     readonly property int barWidth: 26
 
@@ -73,12 +81,33 @@ Item {
                 implicitHeight: 36
                 color: "#000000"
 
-                Rectangle {
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 1
-                    color: Theme.hairline
+                DragHandler {
+                    target: null
+                    xAxis.enabled: true
+                    yAxis.enabled: true
+                    property real lastX: 0
+                    property real lastY: 0
+                    property real totalX: 0
+                    property real totalY: 0
+                    property real lastScreenX: 0
+                    property real lastScreenY: 0
+                    onTranslationChanged: if (active) {
+                        totalX = translation.x
+                        totalY = translation.y
+                        const win = dock.Window.window
+                        if (win) {
+                            lastScreenX = win.x + centroid.scenePosition.x
+                            lastScreenY = win.y + centroid.scenePosition.y
+                            dock.dragMoved(translation.x - lastX, translation.y - lastY,
+                                           lastScreenX, lastScreenY)
+                        }
+                        lastX = translation.x
+                        lastY = translation.y
+                    }
+                    onActiveChanged: {
+                        if (active) { lastX = 0; lastY = 0; totalX = 0; totalY = 0 }
+                        else dock.dragFinished(totalX, totalY, lastScreenX, lastScreenY)
+                    }
                 }
 
                 // Left: ◀ / ▶ collapse button
@@ -120,6 +149,17 @@ Item {
                                     dock.tabClicked(index)
                                 }
                             }
+                            DragHandler {
+                                enabled: dock.tabsDetachable
+                                target: null
+                                property real lastY: 0
+                                onTranslationChanged: if (active) lastY = translation.y
+                                onActiveChanged: {
+                                    if (!active && Math.abs(lastY) > 40)
+                                        dock.tabFloatRequested(index)
+                                    if (!active) lastY = 0
+                                }
+                            }
                         }
                     }
                 }
@@ -153,6 +193,7 @@ Item {
                     TapHandler { onTapped: dock.actionTriggered(); enabled: dock.actionText !== "" }
                     ToolTipArea { text: "Add"; enabled: dock.actionText !== "" }
                 }
+
             }
 
             Item {
@@ -171,7 +212,7 @@ Item {
         visible: !dock.collapsed
         anchors.right: dock.handleEdge === "right" ? parent.right : undefined
         anchors.left:  dock.handleEdge === "left"  ? parent.left  : undefined
-        color: grab.active || hoverH.hovered ? Theme.accent : Theme.hairline
+        color: grab.active || hoverH.hovered ? Theme.accent : "transparent"
         z: 10
 
         // Expanded interactive hit zone
@@ -185,10 +226,12 @@ Item {
                 id: grab
                 target: null
                 yAxis.enabled: false
+                property real startWidth: 260
+                onActiveChanged: if (active) startWidth = dock.expandedWidth
                 onTranslationChanged: {
                     const d = dock.handleEdge === "right" ? translation.x : -translation.x
                     dock.expandedWidth = Math.max(dock.minWidth,
-                                         Math.min(dock.maxWidth, dock.expandedWidth + d))
+                                         Math.min(dock.maxWidth, startWidth + d))
                 }
             }
         }

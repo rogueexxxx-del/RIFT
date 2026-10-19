@@ -24,14 +24,16 @@ Rectangle {
     Layout.fillWidth: true
     implicitHeight: Theme.header
     color: hover.hovered ? Theme.hover : "transparent"
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: 1
-        color: Theme.hairline
-    }
+    radius: Theme.radius
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: title
+    Accessible.description: expanded ? "Expanded" : "Collapsed"
+    Accessible.onPressAction: toggled()
+    Keys.onSpacePressed: toggled()
+    Keys.onReturnPressed: toggled()
+    border.width: activeFocus ? Theme.focusWidth : 0
+    border.color: Theme.focusRing
 
     RowLayout {
         anchors.fill: parent
@@ -49,17 +51,18 @@ Rectangle {
             Behavior on rotation { NumberAnimation { duration: Theme.fast } }
         }
         Text {
-            text: hdr.title.toUpperCase()
-            color: hdr.marked ? Theme.accent : Theme.text
+            text: hdr.title
+            color: hdr.marked ? Theme.accentText : Theme.text
             font.family: Theme.fontUI
-            font.pixelSize: Theme.sizeTiny
+            font.pixelSize: Theme.size
             font.weight: Font.Medium
-            font.letterSpacing: Theme.microSpacing
         }
         Text {
             visible: !hdr.expanded && hdr.hint !== ""
+            Layout.fillWidth: true
+            elide: Text.ElideRight
             text: hdr.hint
-            color: hdr.marked ? Theme.accent : Theme.textMuted
+            color: hdr.marked ? Theme.accentText : Theme.textMuted
             font.family: Theme.fontUI
             font.pixelSize: Theme.sizeTiny
         }

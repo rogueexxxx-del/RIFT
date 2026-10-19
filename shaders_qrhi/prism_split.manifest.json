@@ -1,0 +1,13 @@
+{
+  "id": "prism_split",
+  "name": "PRISM SPLIT",
+  "version": 1,
+  "frag": "prism_split.frag",
+  "category": "distort",
+  "uniforms": [
+    {"name":"direction","label":"DIRECTION","type":"float","min":-180.0,"max":180.0,"step":1.0,"default":0.0,"discrete":false,"binding":{"channel":"mids","depth":30.0,"curve":"lin","attack":0.08,"release":0.25,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"spreadPx","label":"SPREAD","type":"float","min":0.0,"max":16.0,"step":0.1,"default":2.0,"discrete":false,"binding":{"channel":"highs","depth":3.0,"curve":"lin","attack":0.05,"release":0.2,"in_lo":0.0,"in_hi":1.0}},
+    {"name":"mixAmount","label":"MIX","type":"float","min":0.0,"max":1.0,"step":0.01,"default":0.7,"discrete":false,"binding":{"channel":"transient","depth":0.3,"curve":"lin","attack":0.01,"release":0.2,"in_lo":0.0,"in_hi":1.0}}
+  ],
+  "samplers": [{"name":"u_tex","unit":0,"source":"upstream"}]
+}

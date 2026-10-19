@@ -1,67 +1,50 @@
 import QtQuick
 import QtQuick.Layouts
 
-// Transport only: the controls you touch while watching the picture.
-// Clean, minimal, centered transport controls and timecode.
 Rectangle {
     id: bar
     required property var viewport
 
-    signal importRequested()
-
-    implicitHeight: Theme.toolbar
-    color: "#000000"
-
-    // Top hairline border
-    Rectangle {
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 1
-        color: Theme.hairline
+    readonly property bool hasRange: viewport.markOut > viewport.markIn
+    readonly property real rangeDuration: hasRange ? viewport.markOut - viewport.markIn : 0
+    function formatTime(t) {
+        const cs = Math.round(Math.max(0, t) * 100)
+        return Math.floor(cs / 6000) + ":" + (Math.floor(cs / 100) % 60).toString().padStart(2, "0")
+            + "." + (cs % 100).toString().padStart(2, "0")
     }
+    readonly property bool narrow: width < 500
+    implicitHeight: transportFlow.height + 8
+    color: Theme.panel
 
     Item {
-        anchors.fill: parent
-        anchors.leftMargin: Theme.padding
-        anchors.rightMargin: Theme.padding
+        id: transportFlow
+        objectName: "transportFlow"
+        width: Math.max(0, parent.width - Theme.padding * 2)
+        x: Theme.padding
+        y: 4
+        height: (bar.narrow ? Theme.control * 2 + Theme.gapTight : Theme.control)
+            + (exportRow.visible ? Theme.control + Theme.gapTight : 0)
 
-        // ── Left: Media name & Export status ──
         Row {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
+            id: exportRow
+            y: (bar.narrow ? Theme.control * 2 + Theme.gapTight : Theme.control) + Theme.gapTight
+            width: parent.width
+            height: Theme.control
+            visible: bar.viewport.exportStatus !== "" || bar.viewport.exporting
             spacing: Theme.gap
-
-            Text {
-                readonly property bool empty: bar.viewport.mediaName === ""
-                text: empty ? "no media - click to import" : bar.viewport.mediaName
-                color: empty && importHover.hovered ? Theme.accent : Theme.textMuted
-                font.family: Theme.fontUI
-                font.pixelSize: Theme.size
-                elide: Text.ElideMiddle
-                width: Math.min(implicitWidth, 220)
-
-                HoverHandler {
-                    id: importHover
-                    enabled: parent.empty
-                    cursorShape: Qt.PointingHandCursor
-                }
-                TapHandler {
-                    enabled: parent.empty
-                    onTapped: bar.importRequested()
-                }
-            }
 
             Text {
                 visible: bar.viewport.exportStatus !== ""
                 text: bar.viewport.exportStatus
-                color: bar.viewport.exporting ? Theme.accent : Theme.textMuted
+                color: bar.viewport.exporting ? Theme.accentText : Theme.textMuted
                 font.family: Theme.fontUI
                 font.pixelSize: Theme.size
                 elide: Text.ElideMiddle
-                width: Math.min(implicitWidth, 200)
+                width: Math.max(0, transportFlow.width
+                    - (cancelExport.visible ? cancelExport.width + Theme.gap : 0))
             }
             FlatButton {
+                id: cancelExport
                 visible: bar.viewport.exporting
                 label: "Cancel"
                 active: true
@@ -69,19 +52,37 @@ Rectangle {
             }
         }
 
-        // ── Center: Minimal Transport Buttons & Timecode ──
+        Text {
+            id: timeReadout
+            objectName: "transportTimecode"
+            y: (Theme.control - height) / 2
+            width: Math.max(0, bar.narrow ? parent.width - rightInfo.width - 8
+                : (parent.width - playback.width) / 2 - 8)
+            text: bar.formatTime(bar.viewport.playhead)
+            elide: Text.ElideRight
+            color: Theme.text
+            font.family: Theme.fontMono
+            font.pixelSize: Math.max(12, Theme.sizeSmall)
+        }
         Row {
-            anchors.centerIn: parent
-            spacing: 6
+            id: playback
+            objectName: "transportPlayback"
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: bar.narrow ? Theme.control + Theme.gapTight : 0
+            spacing: 4
 
             IconButton {
                 kind: "back"
+                width: Theme.control
+                height: Theme.control
                 borderless: true
                 tip: "Back 5 seconds"
                 onClicked: bar.viewport.seek(Math.max(0, bar.viewport.playhead - 5))
             }
             IconButton {
                 kind: bar.viewport.playing ? "pause" : "play"
+                width: Theme.control
+                height: Theme.control
                 borderless: true
                 active: bar.viewport.playing
                 tip: bar.viewport.playing ? "Pause (Space)" : "Play (Space)"
@@ -90,44 +91,33 @@ Rectangle {
             }
             IconButton {
                 kind: "fwd"
+                width: Theme.control
+                height: Theme.control
                 borderless: true
                 tip: "Forward 5 seconds"
                 onClicked: bar.viewport.seek(bar.viewport.playhead + 5)
             }
             IconButton {
                 kind: "stop"
+                width: Theme.control
+                height: Theme.control
                 borderless: true
                 tip: "Stop and return to the start"
                 onClicked: { bar.viewport.pause(); bar.viewport.seek(0) }
             }
 
-            Item { width: 12; height: 1 }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                // mm:ss.cc timecode readout
-                text: {
-                    const t = bar.viewport.playhead
-                    const m = Math.floor(t / 60)
-                    const s = Math.floor(t % 60)
-                    const c = Math.floor((t * 100) % 100)
-                    return String(m).padStart(2, '0') + ":" +
-                           String(s).padStart(2, '0') + "." +
-                           String(c).padStart(2, '0')
-                }
-                color: Theme.text
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.sizeBig
-            }
         }
 
-        // ── Right: Aspect ratio & Plain FPS readout ──
         Row {
+            id: rightInfo
+            objectName: "transportInfo"
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            height: Theme.control
             spacing: Theme.gap
 
             FlatButton {
+                anchors.verticalCenter: parent.verticalCenter
+                plain: true
                 readonly property var names: ["16:9", "1:1", "4:3", "9:16", "21:9"]
                 label: (bar.viewport.projectAspect >= 0 && bar.viewport.projectAspect < names.length)
                        ? names[bar.viewport.projectAspect] : "16:9"
@@ -151,5 +141,6 @@ Rectangle {
                 }
             }
         }
+
     }
 }

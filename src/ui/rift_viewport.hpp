@@ -69,6 +69,7 @@ class RiftViewport : public QQuickItem {
     // The clip track: [{name, path, start, in, out, span, active}].
     Q_PROPERTY(QVariantList clips READ clips NOTIFY clipsChanged)
     Q_PROPERTY(qreal trackDuration READ trackDuration NOTIFY durationChanged)
+    Q_PROPERTY(qreal sequenceDuration READ sequenceDuration WRITE setSequenceDuration NOTIFY durationChanged)
     Q_PROPERTY(int laneCount READ laneCount NOTIFY clipsChanged)
     // The audio-track clips (A1..An), same shape as `clips` so the timeline
     // renders both bands with near-identical delegates:
@@ -169,6 +170,7 @@ public:
     Q_INVOKABLE void setMarkIn(double t);
     Q_INVOKABLE void setMarkOut(double t);
     Q_INVOKABLE void clearMarks();
+    Q_INVOKABLE bool setSequenceRange(qreal start, qreal end);
 
     Q_PROPERTY(QString projectPath READ projectPath NOTIFY projectChanged)
     Q_PROPERTY(QString projectName READ projectName NOTIFY projectChanged)
@@ -216,7 +218,9 @@ public:
     double frameMax() const { return frame_max_; }
     double gpuMs() const    { return gpu_ms_; }
     QVariantList clips() const { return clips_ui_; }
-    qreal  trackDuration() const { return track_dur_; }
+    qreal  trackDuration() const { return sequence_duration_ > 0.0 ? sequence_duration_ : track_dur_; }
+    qreal  sequenceDuration() const { return sequence_duration_; }
+    void   setSequenceDuration(qreal seconds);
     int    laneCount() const { return lane_count_; }
     QVariantList audioClips() const { return audio_clips_ui_; }
     int    audioLaneCount() const { return audio_lane_count_; }
@@ -270,7 +274,7 @@ public:
     QVariantList gradeKeyedNow() const { return grade_keyed_now_; }
     QVariantList gradeKeyInterpNow() const;
 
-    // ── project / preset (docs/contracts/project_format.md v3) ──
+    // ── project / preset (docs/contracts/project_format.md v6) ──
     // A preset is the same document without `clips`, so it can be applied over
     // whatever footage is already loaded.
     // ── per-effect layering ──
@@ -358,9 +362,9 @@ public:
     QString undoLabel() const { return undo_.empty() ? QString() : undo_.back().label; }
     QString redoLabel() const { return redo_.empty() ? QString() : redo_.back().label; }
 
-    // Back to an empty session: no clips, one default effect, neutral grade.
+    // Back to an empty session: no clips or effects, neutral grade.
     Q_INVOKABLE void newProject();
-    // asProject=false writes a PRESET: the look only - chain, params, grade,
+    // asProject=false writes a PRESET: the selected clip's look, grade,
     // controls. No clips, no audio path, no markers, no mode, and the session
     // is not re-pointed at the file. See savePresetNamed().
     Q_INVOKABLE bool saveProject(const QUrl& url, bool asProject = true);
@@ -408,14 +412,15 @@ public:
         if (clip_dragging_ == d) return;
         clip_dragging_ = d;
         emit clipDraggingChanged();
-        // Catch up on whatever was skipped during the gesture.
-        if (!d) pushClips_();
+        // The committed move republishes once; the next tick catches decoder changes.
     }
     // Select which clip the chain rail and params panel are editing.
-    // -1 = the shared chain applied to clips that have no stack of their own.
+    // -1 clears the effect editor until a clip is selected.
     Q_INVOKABLE void selectClip(int index);
     // Drag: move a clip's start; negative is clamped to 0.
     Q_INVOKABLE void setClipStart(int index, qreal start);
+    // Commit both drag coordinates with one history entry and model push.
+    Q_INVOKABLE void moveClip(int index, qreal start, int lane);
     // Copy a clip, effects and all, onto the end of its own lane. Building a
     // piece out of one loop is the common case, and re-importing the same file
     // loses whatever was set up on it.
@@ -446,6 +451,7 @@ public:
     Q_INVOKABLE void addAudioClip(const QUrl& url, int lane = -1, int link = -1);
     Q_INVOKABLE void removeAudioClip(int index);
     Q_INVOKABLE void setAudioClipStart(int index, qreal start);
+    Q_INVOKABLE void moveAudioClip(int index, qreal start, int lane);
     Q_INVOKABLE void setAudioClipTrim(int index, qreal in, qreal out);
     Q_INVOKABLE void setAudioClipLane(int index, int lane);
     Q_INVOKABLE void setAudioClipGain(int index, qreal gain);
@@ -486,6 +492,10 @@ public:
     // channel < 0 unbinds (static value). depth is added on top of the base
     // value, scaled by the channel level.
     Q_INVOKABLE void setBinding(int index, int channel, qreal depth);
+    Q_INVOKABLE void setBindingDynamics(int index, qreal attack, qreal release,
+                                        qreal inLo, qreal inHi);
+    Q_INVOKABLE void setGradeBindingDynamics(int index, qreal attack, qreal release,
+                                             qreal inLo, qreal inHi);
     // Render the current chain to a file. Runs on a SEPARATE offscreen engine
     // with its own QRhi and render thread, so the live viewport keeps drawing
     // instead of freezing for the length of the export.
@@ -615,7 +625,7 @@ private:
     struct Priv;
     std::unique_ptr<Priv> d_;
     QString shader_dir_;
-    int     selected_ = 0;             // index into the chain
+    int     selected_ = -1;            // index into the selected clip's chain
     bool    playing_ = false;
     double  playhead_ = 0.0;
     double  fps_ = 0.0;
@@ -640,18 +650,19 @@ private:
     int     project_aspect_ = 0;   // 0 = 16:9
     bool    link_all_visualizers_ = false;
     QJsonObject vis_color_styles_[4];
-    void    bakeAndUploadLut_(int visIndex);
+    void    bakeAndUploadLut_(int visIndex, bool exportOnly = false);
     void    initVisualizerStyles_();
-    bool    snap_ = true;
+    bool    snap_ = false;
     // Set once the user taps/removes a marker, so the load poll stops
     // overwriting hand-placed ones with freshly detected times.
     bool    markers_edited_ = false;
     qreal   bpm_ = 0.0;
     void    publishMarkers_();         // markers_ -> markers_ui_ + notify
     qreal   track_dur_ = 0.0;
+    qreal   sequence_duration_ = 0.0;
     int     active_clip_ = -1;
     int     lane_count_ = 1;
-    // -1 = editing the shared chain; >= 0 = editing that clip's own stack.
+    // -1 = no clip selected; >= 0 = editing that clip's effects.
     int     edited_clip_ = -1;
     // Mirror the chain being edited into the selected clip's spec. A clip's
     // chain lives in ClipSpec (plain types), so nothing about the UI's node
@@ -665,6 +676,7 @@ private:
     QVariantList audio_clips_ui_;
     int audio_lane_count_ = 1;
     void pushAudioClips_();
+    void publishAudioClips_();
     bool clipLayoutMoved_() const;                 // clip_specs_ -> engine + clips_ui_
     bool audioClipLayoutMoved_() const;
     QString media_name_;
@@ -687,9 +699,9 @@ private:
         // Read live at job start instead, moving the marks after queueing
         // silently re-ranged every job still pending.
         double mark_in = 0.0, mark_out = 0.0;
+        double sequence_duration = 0.0;
         std::vector<rift::ClipSpec>            clips;
         std::vector<rift::AudioClipSpec>       audio_clips;
-        std::vector<rift::Engine::ChainNode>   chain;
         std::vector<rift::Param>               grade;
         // The word QML shows. A parallel enum + lookup table bought nothing.
         QString state = QStringLiteral("PENDING");
@@ -703,6 +715,11 @@ private:
 
     // ── undo / redo ──
     struct Snapshot { QJsonObject state; QString label, tag; qint64 at = 0; };
+    struct HistoryEdit {
+        RiftViewport* owner;
+        Snapshot before;
+        ~HistoryEdit();
+    };
     std::vector<Snapshot> undo_, redo_;
     // Guards against an undo's own restore pushing itself onto the stack.
     bool applying_history_ = false;
@@ -711,7 +728,10 @@ private:
     // Call BEFORE mutating. `tag` coalesces: repeats of the same tag inside
     // kCoalesceMs collapse into one step, so dragging a slider is one undo
     // rather than three hundred.
-    void pushUndo_(const QString& label, const QString& tag);
+    // Keep the returned guard alive until the mutation finishes; no-ops drop it.
+    [[nodiscard]] HistoryEdit pushUndo_(const QString& label, const QString& tag);
+    void finishUndo_(Snapshot before);
+    QJsonObject historyJson_() const;
     void clearRedo_();
     void applySnapshot_(const Snapshot& s);
     static constexpr qint64 kCoalesceMs = 600;

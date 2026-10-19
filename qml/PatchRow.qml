@@ -51,7 +51,7 @@ Item {
                 small: true
                 label: row.channel < 0
                        ? "Static"
-                       : row.viewport.channelNames[row.channel].name
+                       : (row.viewport.channelNames[row.channel] ? row.viewport.channelNames[row.channel].name : "Unavailable channel")
                 active: row.channel >= 0
                 onClicked: row.expanded = !row.expanded
             }

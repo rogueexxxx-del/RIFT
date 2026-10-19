@@ -12,7 +12,7 @@ RIFT turns music into picture. It runs video footage, images, text layers, and p
 
 Download the latest installer from the [Releases](https://github.com/rogueexxxx-del/RIFT/releases) page:
 
-- **[RIFT-1.0.0-setup.exe](https://github.com/rogueexxxx-del/RIFT/releases)** (Windows 10/11 x64 installer)
+- **Windows 10/11 x64 installer** (see the latest release)
 - Portable ZIP releases are also available in Releases.
 
 ---

@@ -29,7 +29,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 24
-            radius: 3
+            radius: 0
             color: headerHover.hovered ? Theme.hover : "transparent"
 
             Row {
@@ -103,7 +103,7 @@ Rectangle {
                     required property var modelData
                     width: Math.max(36, Math.floor((group.width - 24) / 4))
                     height: width
-                    radius: 4
+                    radius: 0
                     color: Theme.raised
                     border.width: cardHover.hovered ? 2 : 1
                     border.color: cardHover.hovered ? Theme.accent : Theme.border
@@ -267,7 +267,7 @@ Rectangle {
                     color: Theme.panel
                     border.width: 1
                     border.color: Theme.border
-                    radius: 3
+                    radius: 0
                 }
                 onAccepted: renameDlg.accept()
             }

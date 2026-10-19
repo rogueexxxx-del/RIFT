@@ -95,8 +95,8 @@ The **Effects** panel on the left is a signal chain read top to bottom:
 
 - **`+`** adds an effect. The picker has a search box - type three letters
   rather than scanning fifteen entries.
-- **Drag an effect up or down** to reorder it. Order matters: blur *then*
-  ascii looks nothing like ascii *then* blur.
+- **Drag an effect up or down** to reorder it. Order matters: flow warp *then*
+  ascii looks nothing like ascii *then* flow warp.
 - **Drag it sideways out of the rail** to remove it.
 - Click an effect to edit its settings on the right.
 
@@ -330,7 +330,6 @@ keyframed and audio-patched.
 | **Halftone** | Print-style dot screen. Scale, angle, contrast, softness. |
 | **Dither** | Reduces to few colours with ordered dithering - the early-computer look. |
 | **Risograph** | Duplicator printing: two to four spot inks, each its own halftone pass, deliberately misregistered. Raise **Misreg** and patch it to Transient. |
-| **Terminal** | A CRT text terminal - character cells, phosphor colour, scanlines, screen curvature. |
 
 ### Glitch and damage
 
@@ -344,10 +343,7 @@ keyframed and audio-patched.
 
 | Effect | What it does |
 |---|---|
-| **Cyanotype** | Sun-print process. A blue negative on rag paper, with wash blotches and edge burn. |
-| **Thermal cam** | False-colour infrared. Four palettes; **Cold** and **Hot** set the range and matter more than the palette. |
 | **Electron scan** | Scanning electron microscope - greyscale, glowing edges, beam drift, charge bloom. |
-| **Blur** | Gaussian blur with several modes. |
 | **Lens** | The camera itself - barrel distortion, radial colour fringing, an anamorphic streak off the highlights, vignette. **Fringe** grows with distance from centre, so the middle stays clean. |
 | **Bloom** | Threshold, spread, add back. Unlike Blur it keeps the picture and lays light over it. **Tint** colours only the glow. |
 
@@ -356,7 +352,6 @@ keyframed and audio-patched.
 | Effect | What it does |
 |---|---|
 | **Kaleido** | Folds the frame into wedges around a movable centre, mirroring alternate ones so the seams meet. **Segments** is patched to Snare by default, so the count snaps on a hit. |
-| **Mirror tile** | The same idea on a rectangular grid. **Mode** picks plain repeat, mirror X, mirror Y or the four-way quad. |
 
 ### Motion and time
 

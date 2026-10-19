@@ -68,6 +68,7 @@ public:
 
     // Textures
     TexId createTarget(int w, int h);                 // RGBA8 render target
+    void  prepareScopeTargets(int w, int h);
     TexId uploadImage(const uint8_t* rgba, int w, int h);
     // Upload a CPU RGBA frame into a REUSABLE sampled texture. Pass the id
     // returned last time as `reuse` (0 first call); a new texture is made only

@@ -109,7 +109,7 @@ bool AudioSystem::load(const std::string& audio_path,
 }
 
 bool AudioSystem::setAudioClips(const std::vector<AudioClipSpec>& clips,
-                                const std::string& analysis_path) {
+                               const std::string& analysis_path, bool monitor) {
     audio_clips_   = clips;
     analysis_path_ = analysis_path;
     smoother_.reset();
@@ -131,7 +131,7 @@ bool AudioSystem::setAudioClips(const std::vector<AudioClipSpec>& clips,
     if (!ma_) ma_ = std::make_unique<Ma>();
     // Open the playback device once the mix has something to play; it then
     // runs for the life of the system and `playing_` gates the sound.
-    if (!ma_->output_ok && mixer_ && !mixer_->empty()) {
+    if (monitor && !ma_->output_ok && mixer_ && !mixer_->empty()) {
         ma_device_config cfg = ma_device_config_init(ma_device_type_playback);
         cfg.playback.format   = ma_format_f32;
         cfg.playback.channels = kMixChannels;
@@ -372,7 +372,8 @@ void AudioSystem::updateVisualizerTap(double playhead) {
 #endif
 }
 
-void AudioSystem::getOscilloscope(double playhead, float* outW, int nW, float windowMs) {
+void AudioSystem::getOscilloscope(double playhead, float* outW, int nW, float windowMs,
+                                  float triggerLevel, float holdoff) {
     if (!outW || nW <= 0) return;
     std::fill(outW, outW + nW, 0.f);
 #if RIFT_WITH_AUDIO
@@ -402,14 +403,17 @@ void AudioSystem::getOscilloscope(double playhead, float* outW, int nW, float wi
         trig[i] = lp;
     }
 
-    const float threshold = 0.02f;
+    const float threshold = std::clamp(triggerLevel, 0.f, 0.5f);
+    const int holdoffSamples = std::clamp(int(std::clamp(holdoff, 0.f, 0.5f) * float(W)), 0, W / 2);
     int best_i = -1;
     bool armed = false;
+    int nextAllowed = 0;
     for (int i = 0; i + W < kScopeBuf; ++i) {
         if (trig[i] < -threshold) armed = true;
-        if (armed && trig[i] <= 0.f && trig[i + 1] > 0.f) {
+        if (armed && i >= nextAllowed && trig[i] <= 0.f && trig[i + 1] > 0.f) {
             best_i = i;
             armed = false;
+            nextAllowed = i + holdoffSamples;
         }
     }
 
@@ -431,7 +435,7 @@ void AudioSystem::getOscilloscope(double playhead, float* outW, int nW, float wi
         outW[k] = std::clamp(src[i0] + frac * (src[i1] - src[i0]), -1.f, 1.f);
     }
 #else
-    (void)playhead; (void)windowMs;
+    (void)playhead; (void)windowMs; (void)triggerLevel; (void)holdoff;
 #endif
 }
 
